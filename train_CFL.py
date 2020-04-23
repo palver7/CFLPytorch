@@ -20,12 +20,12 @@ import numpy as np
 import pandas as pd
 from CFLPytorch.offsetcalculator import offcalc
 import time
-import torchprof
+#import torchprof
 from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-writer= SummaryWriter(log_dir="runs/EfficientCFL_100epochs",comment="visualising losses of training and validation")
+writer= SummaryWriter(log_dir="runs/EfficientCFL_300epochs",comment="visualising losses of training and validation")
 
 
 def _sigmoid(x):
@@ -329,11 +329,11 @@ def _train(args):
     target_transform = transforms.Compose([transforms.Resize((img_size,img_size)),
                                            transforms.ToTensor()])     
 
-    trainvalidset = SUN360Dataset(file="traindatasmall.json",transform = None, target_transform = None)
+    trainvalidset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None)
     indices = list(range(len(trainvalidset)))
     split = int(np.floor(len(trainvalidset)*0.8))
-    train_idx = indices[:10]
-    valid_idx = indices[10:]
+    train_idx = indices[:split]
+    valid_idx = indices[split:]
     train = Subset(trainvalidset, train_idx)
     valid = Subset(trainvalidset, valid_idx)
     

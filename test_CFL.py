@@ -164,9 +164,23 @@ def map_predict(outputs, EM_gt,CM_gt):
     #edges,corners = torch.squeeze(edges,dim=1), torch.squeeze(corners,dim=1) 
     #EM,CM = torch.squeeze(EM,dim=1), torch.squeeze(CM,dim=1)
     P_e, R_e, Acc_e, f1_e, IoU_e = evaluate(edges,EM)
-    print('EDGES: IoU: ' + str('%.3f' % IoU_e) + '; Accuracy: ' + str('%.3f' % Acc_e) + '; Precision: ' + str('%.3f' % P_e) + '; Recall: ' + str('%.3f' % R_e) + '; f1 score: ' + str('%.3f' % f1_e))
-    P_c, R_c, Acc_c, f1_c, IoU_c = CMMetric=evaluate(corners, CM)
-    print('CORNERS: IoU: ' + str('%.3f' % IoU_c) + '; Accuracy: ' + str('%.3f' % Acc_c) + '; Precision: ' + str('%.3f' % P_c) + '; Recall: ' + str('%.3f' % R_c) + '; f1 score: ' + str('%.3f' % f1_c))
+    #print('EDGES: IoU: ' + str('%.3f' % IoU_e) + '; Accuracy: ' + str('%.3f' % Acc_e) + '; Precision: ' + str('%.3f' % P_e) + '; Recall: ' + str('%.3f' % R_e) + '; f1 score: ' + str('%.3f' % f1_e))
+    P_c, R_c, Acc_c, f1_c, IoU_c = evaluate(corners, CM)
+    #print('CORNERS: IoU: ' + str('%.3f' % IoU_c) + '; Accuracy: ' + str('%.3f' % Acc_c) + '; Precision: ' + str('%.3f' % P_c) + '; Recall: ' + str('%.3f' % R_c) + '; f1 score: ' + str('%.3f' % f1_c))
+    
+    P_e_np = P_e.cpu().numpy()
+    R_e_np = R_e.cpu().numpy()
+    Acc_e_np = Acc_e.cpu().numpy()
+    f1_e_np = f1_e.cpu().numpy()
+    IoU_e_np = IoU_e.cpu().numpy()
+    
+    P_c_np = P_c.cpu().numpy()
+    R_c_np = R_c.cpu().numpy()
+    Acc_c_np = Acc_c.cpu().numpy()
+    f1_c_np = f1_c.cpu().numpy()
+    IoU_c_np = IoU_c.cpu().numpy() 
+
+    return P_e_np, R_e_np, Acc_e_np, f1_e_np, IoU_e_np, P_c_np, R_c_np, Acc_c_np, f1_c_np, IoU_c_np
 
 def _test(args):
     """
@@ -203,10 +217,10 @@ def _test(args):
     test_loader = DataLoader(testset, batch_size=args.batch_size,
                                                shuffle=False, num_workers=args.workers)
                                               
-    layerdict, offsetdict = offcalc(args.batch_size)
+    #layerdict, offsetdict = offcalc(args.batch_size)
     logger.info("Model loaded")
     model = EfficientNet.from_pretrained(args.model_name,conv_type='Std')
-    model.load_state_dict(torch.load("model.pth"))
+    model.load_state_dict(torch.load("model_epoch300.pth"))
 
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
@@ -214,16 +228,44 @@ def _test(args):
 
     with torch.no_grad():
         model = model.to(device)
+        Pe, Re, Acce, f1e, IoUe = [], [], [], [], []
+        Pc, Rc, Accc, f1c, IoUc = [], [], [], [], []
         for i, data in enumerate(test_loader):
             # get the inputs
             inputs, EM , CM = data
             inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
             model.eval()
             outputs = model(inputs)
-            detection= corners_2_xy(outputs)
-            print(len(detection))
-            #map_predict(outputs,EM,CM)
+            #detection= corners_2_xy(outputs)
+            #print(len(detection))
+            P_e_np, R_e_np, Acc_e_np, f1_e_np, IoU_e_np, P_c_np, R_c_np, Acc_c_np, f1_c_np, IoU_c_np = map_predict(outputs,EM,CM)
+            
+            Pe.append(P_e_np)
+            Re.append(R_e_np)
+            Acce.append(Acc_e_np)
+            f1e.append(f1_e_np)
+            IoUe.append(IoU_e_np)
+
+            Pc.append(P_c_np)
+            Rc.append(R_c_np)
+            Accc.append(Acc_c_np)
+            f1c.append(f1_c_np)
+            IoUc.append(IoU_c_np)
         
+        P_e = np.mean(Pe)
+        R_e = np.mean(Re)
+        Acc_e = np.mean(Acce)
+        f1_e = np.mean(f1e)
+        IoU_e = np.mean(IoUe)
+
+        P_c = np.mean(Pc)
+        R_c = np.mean(Rc)
+        Acc_c = np.mean(Accc)
+        f1_c = np.mean(f1c)
+        IoU_c = np.mean(IoUc) 
+        
+        print('EDGES: IoU: ' + str('%.3f' % IoU_e) + '; Accuracy: ' + str('%.3f' % Acc_e) + '; Precision: ' + str('%.3f' % P_e) + '; Recall: ' + str('%.3f' % R_e) + '; f1 score: ' + str('%.3f' % f1_e))
+        print('CORNERS: IoU: ' + str('%.3f' % IoU_c) + '; Accuracy: ' + str('%.3f' % Acc_c) + '; Precision: ' + str('%.3f' % P_c) + '; Recall: ' + str('%.3f' % R_c) + '; f1 score: ' + str('%.3f' % f1_c))
     print('Finished Testing')
     
 
