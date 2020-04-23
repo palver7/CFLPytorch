@@ -85,8 +85,8 @@ def evaluate(pred, gt):
     IoU = (tp / (tp + fp + fn))
       
 
-    #return torch.mean(P), torch.mean(R), torch.mean(Acc), torch.mean(f1), torch.mean(IoU)
-    return P, R, Acc, f1, IoU
+    return torch.mean(P), torch.mean(R), torch.mean(Acc), torch.mean(f1), torch.mean(IoU)
+    #return P, R, Acc, f1, IoU
 
 
 def ce_loss(pred, gt):
@@ -97,7 +97,22 @@ def ce_loss(pred, gt):
     number of positive or negative labels in that image 
     '''
     #print(torch.max(gt[0][0]),torch.max(gt[1][0]),torch.max(gt[2][0]),torch.max(gt[3][0]))
+    vb = gt.le(0.0).float()
+    vs = gt.gt(0.0).float()
+    nb = torch.sum(vb,dim=(2,3))+1
+    ns = torch.sum(vs,dim=(2,3))+1
+    total_pix=nb+ns+1
+    pb = nb/total_pix
+    ps = ns/total_pix
+    
+    LogitsLoss= nn.BCEWithLogitsLoss()
+    ponderedSCELoss=LogitsLoss(pred,gt)
+    pond = torch.mul(vs.permute(2,3,0,1),1/ps) + torch.mul(vb.permute(2,3,0,1),1/pb)
+    pond = pond.permute(2,3,0,1)
+    ponderedSCELoss = ponderedSCELoss * pond
+    loss = torch.mean(ponderedSCELoss)
 
+    """
     pos_inds = gt.ge(0.1).float()
     neg_inds = gt.lt(0.1).float()
     N = (torch.numel(gt[0][0]))
@@ -115,10 +130,19 @@ def ce_loss(pred, gt):
     pos_loss = pos_loss.sum()
     neg_loss = neg_loss.sum()
     loss = pos_loss + neg_loss
-
+    """
     
     return loss
-    
+
+"""
+def ponderSCEloss(gt, pred_output_valid, vb, vs, pb, ps):
+    pondered_SCEloss = tf.nn.sigmoid_cross_entropy_with_logits(labels=gt, logits = pred_output_valid)  
+    pond = tf.transpose((tf.multiply(tf.transpose(vs,[1,2,0,3]),1/ps)+tf.multiply(tf.transpose(vb,[1,2,0,3]),1/pb)),[2,0,1,3])
+    pondered_SCEloss =pondered_SCEloss*pond
+    pondered_SCEloss =tf.reduce_mean(pondered_SCEloss, name = "cross_entropy") 
+    return pondered_SCEloss    
+"""    
+
 class CELoss(nn.Module):
   '''nn.Module warpper for custom CE loss'''
   def __init__(self):
@@ -228,7 +252,8 @@ def map_loss(inputs, EM_gt,CM_gt,criterion):
     EMLoss=0.
     CMLoss=0.
     for key in inputs:
-        output=_sigmoid(inputs[key])
+        #output=_sigmoid(inputs[key])
+        output = inputs[key]
         EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
         CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
         edges,corners =torch.chunk(output,2,dim=1)
@@ -247,7 +272,15 @@ def convert_to_images(inputs,epoch):
     image = image.astype(np.uint8)
     image = np.squeeze(image)
     image = Image.fromarray(image)
-    image.save("CM_pred/image " + str(epoch)+".jpg")
+    if len(str(epoch)) == 1:
+        epochstr = "000" + str(epoch)
+    elif len(str(epoch)) == 2:
+        epochstr = "00" + str(epoch)
+    elif len(str(epoch)) == 3:
+        epochstr = "0" + str(epoch)
+    else :
+        epochstr = str(epoch)            
+    image.save("CM_pred/epoch_ " + epochstr +".jpg")
 
 def map_predict(outputs, EM_gt,CM_gt):
     '''
@@ -261,7 +294,7 @@ def map_predict(outputs, EM_gt,CM_gt):
     #EM,CM = torch.squeeze(EM,dim=1), torch.squeeze(CM,dim=1)
     P_e, R_e, Acc_e, f1_e, IoU_e = evaluate(edges,EM)
     print('EDGES: IoU: ' + str('%.3f' % IoU_e) + '; Accuracy: ' + str('%.3f' % Acc_e) + '; Precision: ' + str('%.3f' % P_e) + '; Recall: ' + str('%.3f' % R_e) + '; f1 score: ' + str('%.3f' % f1_e))
-    P_c, R_c, Acc_c, f1_c, IoU_c = CMMetric=evaluate(corners, CM)
+    P_c, R_c, Acc_c, f1_c, IoU_c = evaluate(corners, CM)
     print('CORNERS: IoU: ' + str('%.3f' % IoU_c) + '; Accuracy: ' + str('%.3f' % Acc_c) + '; Precision: ' + str('%.3f' % P_c) + '; Recall: ' + str('%.3f' % R_c) + '; f1 score: ' + str('%.3f' % f1_c))
 
 
@@ -322,7 +355,7 @@ def _train(args):
     model = model.to(device)
 
     criterion = CELoss().to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0.1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0.0005)
     LR_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,0.995)
     
     for epoch in range(1, args.epochs+1):
@@ -366,7 +399,7 @@ def _train(args):
                     inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
                     model.eval()
                     outputs = model(inputs)
-                    if(epoch%10 == 0 and i == 0):
+                    if(epoch%100 == 0 and i == 0):
                         convert_to_images(outputs,epoch)
                     EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
                     loss = EMLoss + CMLoss
@@ -377,7 +410,7 @@ def _train(args):
                 epoch_loss = running_loss / len(validset)    
                 #print("valid_loss: %.3f" %(epoch_loss))
                 writer.add_scalar("validation loss",epoch_loss,epoch)
-        if (epoch%25==0):
+        if (epoch%100==0):
             _save_model(model, args.model_dir, epoch)        
         LR_scheduler.step()        
     writer.close()            
@@ -391,6 +424,7 @@ def _save_model(model, model_dir, epoch):
     path = os.path.join(model_dir, modelfile)
     # recommended way from http://pytorch.org/docs/master/notes/serialization.html
     torch.save(model.cpu().state_dict(), path)
+    model.cuda()
 
 
 def model_fn(model_dir,model_name):
@@ -430,10 +464,10 @@ if __name__ == '__main__':
     #parser.add_argument('--model-dir', type=str, default=env.model_dir)
     #parser.add_argument('--data-dir', type=str, default=env.channel_input_dirs.get('training'))
     #parser.add_argument('--num-gpus', type=int, default=env.num_gpus)
-    #time1= time.time()
+    time1= time.time()
     _train(parser.parse_args())
-    #time2=time.time()
-    #diff = time2 - time1
-    #print(diff," seconds")
-    #print(diff/60," minutes")
+    time2=time.time()
+    diff = time2 - time1
+    print(diff," seconds")
+    print(diff/60," minutes")
     
