@@ -258,12 +258,20 @@ def map_loss(inputs, EM_gt,CM_gt,criterion):
 def convert_to_images(inputs,epoch):
     if not os.path.isdir("CM_pred"):
         os.mkdir("CM_pred")
+    if not os.path.isdir("EM_pred"):
+        os.mkdir("EM_pred")    
     output = _sigmoid(inputs['output'])
     edges,corners =torch.chunk(output,2,dim=1)
     image = corners[0].detach().cpu().numpy() * 255
     image = image.astype(np.uint8)
     image = np.squeeze(image)
     image = Image.fromarray(image)
+
+    image1 = edges[0].detach().cpu().numpy() * 255
+    image1 = image1.astype(np.uint8)
+    image1 = np.squeeze(image1)
+    image1 = Image.fromarray(image1)
+
     if len(str(epoch)) == 1:
         epochstr = "000" + str(epoch)
     elif len(str(epoch)) == 2:
@@ -273,6 +281,7 @@ def convert_to_images(inputs,epoch):
     else :
         epochstr = str(epoch)            
     image.save("CM_pred/epoch_ " + epochstr +".jpg")
+    image1.save("EM_pred/epoch_ " + epochstr +".jpg")
 
 def map_predict(outputs, EM_gt,CM_gt):
     '''
