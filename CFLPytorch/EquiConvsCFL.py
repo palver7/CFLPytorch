@@ -36,8 +36,8 @@ class MBConvBlock(nn.Module):
         self._conv_type = conv_type
 
         # Get static or dynamic convolution depending on image size
-        Conv2d = get_same_padding_conv2d(image_size=global_params.image_size, conv_type= self._conv_type)
-        StdConv2d = get_same_padding_conv2d(image_size=global_params.image_size, conv_type= 'Std')
+        Conv2d = get_same_padding_conv2d(image_size=[128,256], conv_type= self._conv_type)
+        StdConv2d = get_same_padding_conv2d(image_size=[128,256], conv_type= 'Std')
 
         # Expansion phase
         inp = self._block_args.input_filters  # number of input channels
@@ -130,8 +130,8 @@ class EfficientNet(nn.Module):
         self._layerdict=layerdict
 
         # Get static or dynamic convolution depending on image size
-        Conv2d = get_same_padding_conv2d(image_size=global_params.image_size,conv_type=self._conv_type)
-        StdConv2d = get_same_padding_conv2d(image_size=global_params.image_size, conv_type= 'Std')
+        Conv2d = get_same_padding_conv2d(image_size=[128,256],conv_type=self._conv_type)
+        StdConv2d = get_same_padding_conv2d(image_size=[128,256], conv_type= 'Std')
         
         # Batch norm parameters
         bn_mom = 1 - self._global_params.batch_norm_momentum
@@ -170,6 +170,7 @@ class EfficientNet(nn.Module):
         # Final linear layer
         self._avg_pooling = nn.AdaptiveAvgPool2d(1)
         self._dropout = nn.Dropout(self._global_params.dropout_rate)
+        self._dropout0 = nn.Dropout(p=0.3)
         self._fc = nn.Linear(out_channels, self._global_params.num_classes)
         self._swish = MemoryEfficientSwish()
 
@@ -183,13 +184,9 @@ class EfficientNet(nn.Module):
     def extract_features(self, inputs):
         """ Returns output of the final convolution layer """
         skipconnection={}
-        ret={}
         # Stem
-        index = 0
-        if self._conv_type == 'Std':
-            x = self._swish(self._bn0(self._conv_stem(inputs)))
-        elif self._conv_type == 'Equi':    
-            x = self._swish(self._bn0(self._conv_stem(inputs,self._offsetdict[self._layerdict[index]])))
+        index = 0  
+        x = self._swish(self._bn0(self._conv_stem(inputs,self._offsetdict[self._layerdict[index]].to(inputs.device))))
         skipconnection[index] = x
 
         # Blocks
@@ -199,108 +196,24 @@ class EfficientNet(nn.Module):
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
             index+= 1 
-            if self._conv_type == 'Std':
-                x = block(x, drop_connect_rate=drop_connect_rate)
-            elif self._conv_type == 'Equi':
-                x = block(x, drop_connect_rate=drop_connect_rate, offset=self._offsetdict[self._layerdict[index]])
+            x = block(x, drop_connect_rate=drop_connect_rate, offset=self._offsetdict[self._layerdict[index]].to(inputs.device))
             skipconnection[index] = x
             
 
         # Head
         index+= 1
-        x = self._swish(self._bn1(self._conv_head(x)))
+        x = self._dropout0(self._bn1(self._conv_head(x)))
         skipconnection[index] = x
-     
-     #------------------------------------------------------------------------------------  
-        # decoder EDGE MAPS & CORNERS MAPS   
         
-        connection = 16
-        Conv2d = get_same_padding_conv2d(image_size=self._global_params.image_size, conv_type=self._conv_type)
-        conv1a = Conv2d(x.shape[1], skipconnection[connection].shape[1], kernel_size=3, bias=True, stride=1) 
-        offsetkey = ((7,7),(3,3),(1,1))
-        if self._conv_type == 'Equi':
-            d_2x_ec = self._swish(conv1a(x,self._offsetdict[offsetkey]))
-        elif self._conv_type == 'Std': 
-            d_2x_ec = self._swish(conv1a(x))   
-        d_2x = F.interpolate(d_2x_ec, scale_factor=2, mode="bilinear", align_corners=True)
-
         #for key in skipconnection:
         #    print("index: ",key, "shape: ", skipconnection[key].shape[2])
-        
-        connection = 11
-        d_concat_2x = torch.cat((d_2x,skipconnection[connection]),dim=1)
-        conv1b = Conv2d(d_concat_2x.shape[1], skipconnection[connection].shape[1], kernel_size=3, bias=True, stride=1) 
-        offsetkey = ((14,14),(3,3),(1,1))
-        if self._conv_type == 'Equi':
-            d_4x_ec = self._swish(conv1b(d_concat_2x,self._offsetdict[offsetkey]))
-        elif self._conv_type == 'Std':
-            d_4x_ec = self._swish(conv1b(d_concat_2x))    
-        d_4x = F.interpolate(d_4x_ec, scale_factor=2, mode="bilinear", align_corners=True)
-        conv1c = Conv2d(d_4x.shape[1], 2, kernel_size=3, bias=True, stride=1) 
-        offsetkey = ((28,28),(3,3),(1,1))
-        if self._conv_type == 'Equi':
-            output4x_likelihood = conv1c(d_4x,self._offsetdict[offsetkey])
-        elif self._conv_type == 'Std':
-            output4x_likelihood = conv1c(d_4x)    
-        ret['output4x'] = output4x_likelihood
-
-        connection = 5
-        d_concat_4x = torch.cat((d_4x,skipconnection[connection],output4x_likelihood),dim=1)
-        conv2a = Conv2d(d_concat_4x.shape[1], skipconnection[connection].shape[1], kernel_size=3, bias=True, stride=1) 
-        offsetkey = ((28,28),(3,3),(1,1))
-        if self._conv_type == 'Equi':
-            d_8x_ec = self._swish(conv2a(d_concat_4x,self._offsetdict[offsetkey]))
-        elif self._conv_type == 'Std':
-            d_8x_ec = self._swish(conv2a(d_concat_4x))    
-        d_8x = F.interpolate(d_8x_ec, scale_factor=2, mode="bilinear", align_corners=True)
-        conv2b = Conv2d(d_8x.shape[1], 2, kernel_size=3, bias=True, stride=1) 
-        offsetkey = ((56,56),(3,3),(1,1))
-        if self._conv_type == 'Equi':
-            output8x_likelihood = conv2b(d_8x,self._offsetdict[offsetkey])
-        elif self._conv_type == 'Std':
-            output8x_likelihood = conv2b(d_8x)
-        ret['output8x'] = output8x_likelihood
-        
-        connection = 3
-        d_concat_8x = torch.cat((d_8x,skipconnection[connection],output8x_likelihood),dim=1)
-        conv3a = Conv2d(d_concat_8x.shape[1], skipconnection[connection].shape[1], kernel_size=5, bias=True, stride=1) 
-        offsetkey = ((56,56),(5,5),(1,1))
-        if self._conv_type == 'Equi':
-            d_16x_ec = self._swish(conv3a(d_concat_8x,self._offsetdict[offsetkey]))
-        elif self._conv_type == 'Std': 
-            d_16x_ec = self._swish(conv3a(d_concat_8x))   
-        d_16x = F.interpolate(d_16x_ec, scale_factor=2, mode="bilinear", align_corners=True)
-        conv3b = Conv2d(d_16x.shape[1], 2, kernel_size=3, bias=True, stride=1) 
-        offsetkey = ((112,112),(3,3),(1,1))
-        if self._conv_type == 'Equi':
-            output16x_likelihood = conv3b(d_16x,self._offsetdict[offsetkey])
-        elif self._conv_type == 'Std':  
-            output16x_likelihood = conv3b(d_16x)  
-        ret['output16x'] = output16x_likelihood
-        
-        connection = 1
-        d_concat_16x = torch.cat((d_16x,skipconnection[connection],output16x_likelihood),dim=1)
-        conv4a = Conv2d(d_concat_16x.shape[1], skipconnection[connection].shape[1], kernel_size=5, bias=True, stride=1) 
-        offsetkey = ((112,112),(5,5),(1,1))
-        if self._conv_type == 'Equi':
-            d_16x_conv1 = self._swish(conv4a(d_concat_16x,self._offsetdict[offsetkey]))
-        elif self._conv_type == 'Std':    
-            d_16x_conv1 = self._swish(conv4a(d_concat_16x))
-        conv4b = Conv2d(d_16x_conv1.shape[1], 2, kernel_size=3, bias=True, stride=1) 
-        offsetkey = ((112,112),(3,3),(1,1))
-        if self._conv_type == 'Equi':
-            output_likelihood = conv4b(d_16x_conv1,self._offsetdict[offsetkey])
-        elif self._conv_type == 'Std':
-            output_likelihood = conv4b(d_16x_conv1)    
-        ret['output'] = output_likelihood
-        
-        return ret
+        return x, skipconnection, index
 
     def forward(self, inputs):
         """ Calls extract_features to extract features, applies final linear layer, and returns logits. """
-        bs = inputs.size(0)
+        #bs = inputs.size(0)
         # Convolution layers
-        x = self.extract_features(inputs)
+        x, skipdict, index = self.extract_features(inputs)
         """
         # Pooling and final linear layer
         x = self._avg_pooling(x)
@@ -308,7 +221,7 @@ class EfficientNet(nn.Module):
         x = self._dropout(x)
         x = self._fc(x)
         """
-        return x
+        return x, skipdict, index
         
 
     @classmethod
@@ -340,13 +253,80 @@ class EfficientNet(nn.Module):
         if model_name not in valid_models:
             raise ValueError('model_name should be one of: ' + ', '.join(valid_models))
 
-"""
+class EquiConvsCFL(nn.Module):
+    def __init__(self, model_name, conv_type=None, layerdict=None, offsetdict=None):
+        super().__init__()
+        self._encoder = EfficientNet.from_pretrained(model_name,conv_type=conv_type, layerdict=layerdict, offsetdict=offsetdict)
+        self._swish = MemoryEfficientSwish()
+        self._conv_type = conv_type
+        self._offsetdict=offsetdict
+        self._layerdict=layerdict
+        
+        # decoder layer
+        Conv2d = get_same_padding_conv2d(image_size=[4,8], conv_type=self._conv_type)
+        self._conv1a = Conv2d(1280, 320, kernel_size=3, bias=True, stride=1) 
+        self._conv1b = Conv2d(432, 112, kernel_size=3, bias=True, stride=1)
+        self._conv1c = Conv2d(112, 2, kernel_size=3, bias=True, stride=1)
+        self._conv2a = Conv2d(154, 40, kernel_size=3, bias=True, stride=1)
+        self._conv2b = Conv2d(40, 2, kernel_size=3, bias=True, stride=1)
+        self._conv3a = Conv2d(66, 24, kernel_size=5, bias=True, stride=1)
+        self._conv3b = Conv2d(24, 2, kernel_size=3, bias=True, stride=1)
+        self._conv4a = Conv2d(42, 16, kernel_size=5, bias=True, stride=1) 
+        self._conv4b = Conv2d(16, 2, kernel_size=3, bias=True, stride=1)
+    
+    def forward(self, inputs):
+        ret={}
+        x, skipconnection, index = self._encoder(inputs)
+        #------------------------------------------------------------------------------------  
+        # decoder EDGE MAPS & CORNERS MAPS   
+        
+        layer = index+1
+        d_2x_ec = self._swish(self._conv1a(x,self._offsetdict[self._layerdict[layer]].to(x.device)))   
+        d_2x = F.interpolate(d_2x_ec, scale_factor=2, mode="bilinear", align_corners=True)
+
+        connection = 11
+        d_concat_2x = torch.cat((d_2x,skipconnection[connection]),dim=1)
+        layer = index+2
+        d_4x_ec = self._swish(self._conv1b(d_concat_2x,self._offsetdict[self._layerdict[layer]].to(x.device)))   
+        d_4x = F.interpolate(d_4x_ec, scale_factor=2, mode="bilinear", align_corners=True) 
+        layer = index+3
+        output4x_likelihood = self._conv1c(d_4x,self._offsetdict[self._layerdict[layer]].to(x.device))
+        ret['output4x'] = output4x_likelihood
+
+        connection = 5
+        d_concat_4x = torch.cat((d_4x,skipconnection[connection],output4x_likelihood),dim=1)
+        layer = index+4
+        d_8x_ec = self._swish(self._conv2a(d_concat_4x,self._offsetdict[self._layerdict[layer]].to(x.device)))
+        d_8x = F.interpolate(d_8x_ec, scale_factor=2, mode="bilinear", align_corners=True)
+        layer = index+5 
+        output8x_likelihood = self._conv2b(d_8x,self._offsetdict[self._layerdict[layer]].to(x.device))
+        ret['output8x'] = output8x_likelihood
+        
+        connection = 3
+        d_concat_8x = torch.cat((d_8x,skipconnection[connection],output8x_likelihood),dim=1)
+        layer = index+6 
+        d_16x_ec = self._swish(self._conv3a(d_concat_8x,self._offsetdict[self._layerdict[layer]].to(x.device)))  
+        d_16x = F.interpolate(d_16x_ec, scale_factor=2, mode="bilinear", align_corners=True)
+        layer = index+7 
+        output16x_likelihood = self._conv3b(d_16x,self._offsetdict[self._layerdict[layer]].to(x.device))
+        ret['output16x'] = output16x_likelihood
+        
+        connection = 1
+        d_concat_16x = torch.cat((d_16x,skipconnection[connection],output16x_likelihood),dim=1)
+        layer = index+8
+        d_16x_conv1 = self._swish(self._conv4a(d_concat_16x,self._offsetdict[self._layerdict[layer]].to(x.device)))
+        layer = index+9 
+        output_likelihood = self._conv4b(d_16x_conv1,self._offsetdict[self._layerdict[layer]].to(x.device))
+        ret['output'] = output_likelihood
+        
+        return ret
+
 if __name__ == '__main__':
     from offsetcalculator import offcalc
-    input0 = torch.randn(1,3,224,224)
+    input0 = torch.randn(1,3,128,256)
     layerdict, offsetdict = offcalc(1)
-    model = EfficientNet.from_name('efficientnet-b0','Equi', layerdict=layerdict, offsetdict=offsetdict)
+    model = EquiConvsCFL('efficientnet-b0','Equi', layerdict=layerdict, offsetdict=offsetdict)
     output0 = model(input0)
     print(output0['output'].shape)
-"""    
+   
  

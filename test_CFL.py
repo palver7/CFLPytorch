@@ -1,4 +1,5 @@
-from CFLPytorch.EfficientCFL import EfficientNet
+from CFLPytorch.StdConvsCFL import StdConvsCFL
+from CFLPytorch.EquiConvsCFL import EquiConvsCFL
 import argparse
 import logging
 #import sagemaker_containers
@@ -25,9 +26,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def _sigmoid(x):
-  y = torch.clamp(x.sigmoid_(), min=1e-4, max=1-1e-4)
-  return y
+eps = 1e-10 # epsilon to improve numerical stability
 
 def evaluate(pred, gt):
     """
@@ -133,7 +132,8 @@ class SUN360Dataset(Dataset):
 
 
 def corners_2_xy(outputs):
-    output = _sigmoid(outputs['output'])
+    output = outputs['output'] + eps
+    output = torch.sigmoid(output)
     edges,corners =torch.chunk(output,2,dim=1)
     corner1= 255* corners
     corner1[corner1>127] = 255
@@ -157,7 +157,8 @@ def map_predict(outputs, EM_gt,CM_gt):
     '''
     function to calculate total loss according to CFL paper
     '''
-    output=_sigmoid(outputs['output'])
+    output= outputs['output'] + eps
+    output = torch.sigmoid(output)
     EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     edges,corners =torch.chunk(output,2,dim=1)
@@ -204,23 +205,27 @@ def _test(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     logger.info("Device Type: {}".format(device))
-    img_size=EfficientNet.get_image_size(args.model_name)
+    img_size= [128,256]
     logger.info("Loading SUN360 dataset")
     transform = transforms.Compose(
-        [transforms.Resize((img_size,img_size)),
+        [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    target_transform = transforms.Compose([transforms.Resize((img_size,img_size)),
+    target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
     testset = SUN360Dataset("testdata.json",transform = transform, target_transform = target_transform)
     test_loader = DataLoader(testset, batch_size=args.batch_size,
                                                shuffle=False, num_workers=args.workers)
                                               
-    #layerdict, offsetdict = offcalc(args.batch_size)
+    
     logger.info("Model loaded")
-    model = EfficientNet.from_pretrained(args.model_name,conv_type='Std')
-    model.load_state_dict(torch.load("model_epoch300.pth"))
+    if args.conv_type == "Std":
+        model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
+    elif args.conv_type == "Equi":                           
+        layerdict, offsetdict = torch.load('layertest.pt'), torch.load('offsettest.pt')
+        model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)
+    model.load_state_dict(torch.load(args.modelfile))
 
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
@@ -280,7 +285,7 @@ def _save_model(model, model_dir):
 def model_fn(model_dir):
     logger.info('model_fn')
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = EfficientNet.from_pretrained('efficient-b0',conv_type='Equi')
+    model = StdConvsCFL('efficient-b0',conv_type='Std')
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
@@ -299,6 +304,8 @@ if __name__ == '__main__':
                         help='batch size (default: 1)')
     parser.add_argument('--model-dir', type=str, default="")
     parser.add_argument('--model-name', type=str, default="efficientnet-b0")
+    parser.add_argument('--conv_type', type=str,default="Std", help='select convolution type between Std and Equi. Also determines the network type')
+    parser.add_argument('--modelfile', type=str, default="model_epoch100.pth", help="load model file for inference")
     #parser.add_argument('--dist_backend', type=str, default='gloo', help='distributed backend (default: gloo)')
 
     #env = sagemaker_containers.training_env()

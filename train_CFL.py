@@ -1,5 +1,5 @@
 from CFLPytorch.StdConvsCFL import StdConvsCFL
-from CFLPytorch.EquiConvsCFL import EfficientNet as EquiConvs
+from CFLPytorch.EquiConvsCFL import EquiConvsCFL
 import argparse
 import logging
 #import sagemaker_containers
@@ -19,7 +19,7 @@ from torch.utils.data import Dataset, DataLoader, Subset
 from PIL import Image
 import numpy as np
 import pandas as pd
-from CFLPytorch.offsetcalculator import offcalc
+#from CFLPytorch.offsetcalculator import offcalc
 import time
 #import torchprof
 from torch.utils.tensorboard import SummaryWriter
@@ -29,9 +29,7 @@ logger.setLevel(logging.DEBUG)
 writer= SummaryWriter(log_dir="runs/EfficientCFL_300epochs",comment="visualising losses of training and validation")
 
 
-def _sigmoid(x):
-  y = torch.clamp(x.sigmoid_(), min=1e-4, max=1-1e-4)
-  return y
+eps = 1e-10 #epsilon to improve numerical stability
   
 
 def evaluate(pred, gt):
@@ -244,13 +242,10 @@ def map_loss(inputs, EM_gt,CM_gt,criterion):
     EMLoss=0.
     CMLoss=0.
     for key in inputs:
-        #output=_sigmoid(inputs[key])
-        output = inputs[key]
+        output = inputs[key] + eps
         EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
         CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
         edges,corners =torch.chunk(output,2,dim=1)
-        #edges,corners = torch.squeeze(edges,dim=1), torch.squeeze(corners,dim=1) 
-        #EM,CM = torch.squeeze(EM,dim=1), torch.squeeze(CM,dim=1)
         EMLoss += criterion(edges,EM)
         CMLoss += criterion(corners,CM)        
     return EMLoss, CMLoss
@@ -260,7 +255,8 @@ def convert_to_images(inputs,epoch):
         os.mkdir("CM_pred")
     if not os.path.isdir("EM_pred"):
         os.mkdir("EM_pred")    
-    output = _sigmoid(inputs['output'])
+    output = inputs['output'] + eps
+    output = torch.sigmoid(output)
     edges,corners =torch.chunk(output,2,dim=1)
     image = corners[0].detach().cpu().numpy() * 255
     image = image.astype(np.uint8)
@@ -287,12 +283,11 @@ def map_predict(outputs, EM_gt,CM_gt):
     '''
     function to calculate total loss according to CFL paper
     '''
-    output=_sigmoid(outputs['output'])
+    output= outputs['output'] + eps
+    output = torch.sigmoid(output)
     EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     edges,corners =torch.chunk(output,2,dim=1)
-    #edges,corners = torch.squeeze(edges,dim=1), torch.squeeze(corners,dim=1) 
-    #EM,CM = torch.squeeze(EM,dim=1), torch.squeeze(CM,dim=1)
     P_e, R_e, Acc_e, f1_e, IoU_e = evaluate(edges,EM)
     print('EDGES: IoU: ' + str('%.3f' % IoU_e) + '; Accuracy: ' + str('%.3f' % Acc_e) + '; Precision: ' + str('%.3f' % P_e) + '; Recall: ' + str('%.3f' % R_e) + '; f1 score: ' + str('%.3f' % f1_e))
     P_c, R_c, Acc_c, f1_c, IoU_c = evaluate(corners, CM)
@@ -330,11 +325,11 @@ def _train(args):
     target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
-    trainvalidset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None)
+    trainvalidset = SUN360Dataset(file="traindatasmall.json",transform = None, target_transform = None)
     indices = list(range(len(trainvalidset)))
     split = int(np.floor(len(trainvalidset)*0.8))
-    train_idx = indices[:split]
-    valid_idx = indices[split:]
+    train_idx = indices[:10]
+    valid_idx = indices[10:]
     train = Subset(trainvalidset, train_idx)
     valid = Subset(trainvalidset, valid_idx)
     
@@ -345,13 +340,19 @@ def _train(args):
     validset = SplitDataset(valid, transform = transform, target_transform = target_transform)
     valid_loader = DataLoader(validset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers)
-    timeoffset1=time.time()                                         
-    #layerdict, offsetdict = offcalc(args.batch_size)
-    timeoffset2 = time.time()
-    offsetdiff = timeoffset2 - timeoffset1 
-    
+     
     logger.info("Model loaded")
-    model = StdConvsCFL(args.model_name,conv_type='Std', layerdict=None, offsetdict=None)
+    if args.conv_type == "Std":
+        timeoffset1=time.time()                                         
+        timeoffset2 = time.time()
+        offsetdiff = timeoffset2 - timeoffset1
+        model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
+    elif args.conv_type == "Equi":
+        timeoffset1=time.time()                                         
+        layerdict, offsetdict = torch.load('layertrain.pt'), torch.load('offsettrain.pt')
+        timeoffset2 = time.time()
+        offsetdiff = timeoffset2 - timeoffset1
+        model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)    
 
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
@@ -421,7 +422,7 @@ def _train(args):
         epochtime2 = time.time()
     epochdiff = epochtime2 - epochtime1          
     writer.close()   
-    print ("time for offset precalculation: ", offsetdiff)   
+    print ("time for offset loading: ", offsetdiff)   
     print ("time for 1 complete epoch: ", epochdiff)      
     print('Finished Training')
     
@@ -439,7 +440,7 @@ def _save_model(model, model_dir, epoch):
 def model_fn(model_dir,model_name):
     logger.info('model_fn')
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = EquiConvs.from_pretrained(model_name,conv_type='Equi')
+    model = EquiConvsCFL(model_name,conv_type='Equi')
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
@@ -465,6 +466,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='momentum (default: 0.9)')
     parser.add_argument('--model-dir', type=str, default="")
     parser.add_argument('--model-name', type=str,default="efficientnet-b0")
+    parser.add_argument('--conv_type', type=str,default="Std", help='select convolution type between Std and Equi. Also determines the network type')
     #parser.add_argument('--dist_backend', type=str, default='gloo', help='distributed backend (default: gloo)')
 
     #env = sagemaker_containers.training_env()

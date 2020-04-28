@@ -130,8 +130,8 @@ class EfficientNet(nn.Module):
         self._layerdict=layerdict
 
         # Get static or dynamic convolution depending on image size
-        Conv2d = get_same_padding_conv2d(image_size=global_params.image_size,conv_type=self._conv_type)
-        StdConv2d = get_same_padding_conv2d(image_size=global_params.image_size, conv_type= 'Std')
+        Conv2d = get_same_padding_conv2d(image_size=[128,256],conv_type=self._conv_type)
+        StdConv2d = get_same_padding_conv2d(image_size=[128,256], conv_type= 'Std')
         
         # Batch norm parameters
         bn_mom = 1 - self._global_params.batch_norm_momentum
@@ -211,28 +211,6 @@ class EfficientNet(nn.Module):
 
         return x, skipconnection
 
-    """
-     #------------------------------------------------------------------------------------     
-            # decoder EDGE MAPS & CORNERS MAPS
-            (self.feed('bn5c_branch2c') 
-                 .upconv(None,512,ksize=5,stride=2,name='d_2x', biased=True, relu=True))
-            (self.feed('d_2x','res4f_relu')
-                 .concat(axis=3,name="d_concat_2x")
-                 .upconv(None,256,ksize=5,stride=2,name='d_4x', biased=True, relu=True)
-                 .upconv(None, 2, ksize=3,stride=1,biased=True,relu=False, name = 'output4X_likelihood')) 
-            (self.feed('d_4x','res3d_relu','output4X_likelihood')
-                 .concat(axis=3,name="d_concat_4x")
-                 .upconv(None, 128,ksize=5, stride=2,biased=True, relu=True, name='d_8x')
-                 .upconv(None, 2, ksize=3, stride=1,relu=False, biased=True,name = 'output8X_likelihood'))
-            (self.feed('d_8x','res2c_relu','output8X_likelihood')
-                 .concat(axis=3,name="d_concat_8x")
-                 .upconv(None, 64, ksize=5,stride= 2,biased=True, relu=True, name='d_16x')
-                 .upconv(None, 2, ksize=3, stride=1,relu=False, biased=True,name = 'output16X_likelihood'))
-            (self.feed('d_16x','bn_conv1','output16X_likelihood')
-                 .concat(axis=3,name="d_concat_16x")
-                 .upconv(None,64, ksize=3,stride= 1, biased=True, relu=True, name='d_16x_conv1')               
-                 .upconv(None, 2, ksize=3, stride=1,biased=True,relu=False, name = 'output_likelihood'))
-    """
 
     def forward(self, inputs):
         """ Calls extract_features to extract features, applies final linear layer, and returns logits. """
@@ -332,7 +310,7 @@ class StdConvsCFL(nn.Module):
     
 
 if __name__ == '__main__':
-    input0 = torch.randn(1,3,224,224)
+    input0 = torch.randn(1,3,128,256)
     model = StdConvsCFL('efficientnet-b0','Std', layerdict=None, offsetdict=None)
     output0 = model(input0)
     print(output0['output'].shape)

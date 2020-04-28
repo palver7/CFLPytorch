@@ -148,7 +148,7 @@ class EquiConv2dStaticSamePadding(DeformConv2d):
         else:
             self.static_padding = Identity()
 
-    def forward(self, x,offset):
+    def forward(self, x, offset):
         x = self.static_padding(x)
         if x.shape[0] != offset.shape[0] :
             sizediff = offset.shape[0] - x.shape[0]
