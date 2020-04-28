@@ -124,11 +124,7 @@ class EquiConv2dDynamicSamePadding(DeformConv2d):
         if x.shape[0] != offset.shape[0] :
             sizediff = offset.shape[0] - x.shape[0]
             offset = torch.split(offset,[x.shape[0],sizediff],dim=0)
-            offset = offset[0]
-        offset = offset.to(x.device)
-        self.weight = nn.Parameter(self.weight.to(x.device))
-        if self.bias is not None:
-            self.bias = nn.Parameter(self.bias.to(x.device))    
+            offset = offset[0]   
         return deform_conv2d(x, offset, self.weight, self.bias, self.stride, self.padding, self.dilation)
 
 
@@ -157,11 +153,7 @@ class EquiConv2dStaticSamePadding(DeformConv2d):
         if x.shape[0] != offset.shape[0] :
             sizediff = offset.shape[0] - x.shape[0]
             offset = torch.split(offset,[x.shape[0],sizediff],dim=0)
-            offset = offset[0]
-        offset = offset.to(x.device)
-        self.weight = nn.Parameter(self.weight.to(x.device))
-        if self.bias is not None:
-            self.bias = nn.Parameter(self.bias.to(x.device))    
+            offset = offset[0]    
         x = deform_conv2d(x, offset, self.weight, self.bias, self.stride, self.padding, self.dilation)
         return x
 
@@ -216,6 +208,8 @@ class Conv2dStaticSamePadding(nn.Conv2d):
             self.bias = nn.Parameter(self.bias.to(x.device))    
         x = F.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
         return x
+
+       
 
 
 class Identity(nn.Module):

@@ -1,4 +1,5 @@
-from CFLPytorch.EfficientCFL import EfficientNet
+from CFLPytorch.StdConvsCFL import StdConvsCFL
+from CFLPytorch.EquiConvsCFL import EfficientNet as EquiConvs
 import argparse
 import logging
 #import sagemaker_containers
@@ -133,15 +134,6 @@ def ce_loss(pred, gt):
     """
     
     return loss
-
-"""
-def ponderSCEloss(gt, pred_output_valid, vb, vs, pb, ps):
-    pondered_SCEloss = tf.nn.sigmoid_cross_entropy_with_logits(labels=gt, logits = pred_output_valid)  
-    pond = tf.transpose((tf.multiply(tf.transpose(vs,[1,2,0,3]),1/ps)+tf.multiply(tf.transpose(vb,[1,2,0,3]),1/pb)),[2,0,1,3])
-    pondered_SCEloss =pondered_SCEloss*pond
-    pondered_SCEloss =tf.reduce_mean(pondered_SCEloss, name = "cross_entropy") 
-    return pondered_SCEloss    
-"""    
 
 class CELoss(nn.Module):
   '''nn.Module warpper for custom CE loss'''
@@ -320,13 +312,13 @@ def _train(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     #device = 'cpu'
     logger.info("Device Type: {}".format(device))
-    img_size = EfficientNet.get_image_size(args.model_name)
+    img_size = [128,256]
     logger.info("Loading SUN360 dataset")
     transform = transforms.Compose(
-        [transforms.Resize((img_size,img_size)),
+        [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    target_transform = transforms.Compose([transforms.Resize((img_size,img_size)),
+    target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
     trainvalidset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None)
@@ -344,10 +336,13 @@ def _train(args):
     validset = SplitDataset(valid, transform = transform, target_transform = target_transform)
     valid_loader = DataLoader(validset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers)
-                                             
+    timeoffset1=time.time()                                         
     #layerdict, offsetdict = offcalc(args.batch_size)
+    timeoffset2 = time.time()
+    offsetdiff = timeoffset2 - timeoffset1 
+    
     logger.info("Model loaded")
-    model = EfficientNet.from_pretrained(args.model_name,conv_type='Std', layerdict=None, offsetdict=None)
+    model = StdConvsCFL(args.model_name,conv_type='Std', layerdict=None, offsetdict=None)
 
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
@@ -359,6 +354,7 @@ def _train(args):
     LR_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,0.995)
     
     for epoch in range(1, args.epochs+1):
+        epochtime1=time.time()
         # training phase
         running_loss = 0.0
         for i, data in enumerate(train_loader):
@@ -412,8 +408,12 @@ def _train(args):
                 writer.add_scalar("validation loss",epoch_loss,epoch)
         if (epoch%100==0):
             _save_model(model, args.model_dir, epoch)        
-        LR_scheduler.step()        
-    writer.close()            
+        LR_scheduler.step()  
+        epochtime2 = time.time()
+    epochdiff = epochtime2 - epochtime1          
+    writer.close()   
+    print ("time for offset precalculation: ", offsetdiff)   
+    print ("time for 1 complete epoch: ", epochdiff)      
     print('Finished Training')
     
 
@@ -430,12 +430,12 @@ def _save_model(model, model_dir, epoch):
 def model_fn(model_dir,model_name):
     logger.info('model_fn')
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = EfficientNet.from_pretrained(model_name,conv_type='Equi')
+    model = EquiConvs.from_pretrained(model_name,conv_type='Equi')
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
 
-    with open(os.path.join(model_dir, 'model.pth'), 'rb') as f:
+    with open(os.path.join(model_dir, 'model_epoch300.pth'), 'rb') as f:
         model.load_state_dict(torch.load(f))
     return model.to(device)
 
@@ -468,6 +468,6 @@ if __name__ == '__main__':
     _train(parser.parse_args())
     time2=time.time()
     diff = time2 - time1
-    print(diff," seconds")
-    print(diff/60," minutes")
+    print("total execution time: ",diff," seconds")
+    print("total execution time: ",diff/60," minutes")
     

@@ -1,5 +1,6 @@
 __version__ = "0.6.3"
-from .EfficientCFL import EfficientNet
+from .StdConvsCFL import StdConvsCFL 
+from .EquiConvsCFL import EfficientNet as EquiConvs
 from .utils import (
     GlobalParams,
     BlockArgs,
