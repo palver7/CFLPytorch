@@ -1,4 +1,4 @@
-## EquiConv PyTorch implementation
+## Corners For Layout (CFL) PyTorch implementation
 
 This is the adaptation of the Corners for Layout by C. Fernandez et.al (https://arxiv.org/abs/1903.08094)
 
