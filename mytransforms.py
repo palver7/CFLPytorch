@@ -98,7 +98,7 @@ class RandomGaussianBlur(object) :
         x = x[None,...]
         padding = int((kernel_size - 1) / 2)
         x = NF.pad(x, (padding, padding, padding, padding), mode='reflect')
-        x = torch.squeeze(NF.conv2d(x, kernel, groups=self.channels))
+        x = torch.squeeze(NF.conv2d(x, kernel, groups=self.channels), dim=0)
 
         return x
 

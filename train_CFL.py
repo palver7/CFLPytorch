@@ -191,7 +191,7 @@ class SUN360Dataset(Dataset):
             EM = self.target_transform(EM)  
 
         if self.joint_transform is not None:
-            image, EM, CM = joint_transform([image, EM, CM])
+            image, EM, CM = self.joint_transform([image, EM, CM])
 
         return image, EM, CM
 
@@ -239,7 +239,7 @@ class SplitDataset(Dataset):
             EM = self.target_transform(EM)    
         
         if self.joint_transform is not None:
-            image, EM, CM = joint_transform([image, EM, CM])
+            image, EM, CM = self.joint_transform([image, EM, CM])
 
         return image, EM, CM
 
