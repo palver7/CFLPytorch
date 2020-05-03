@@ -320,7 +320,7 @@ def _train(args):
                 dist.get_world_size()) + 'Current host rank is {}. Using cuda: {}. Number of gpus: {}'.format(
                 dist.get_rank(), torch.cuda.is_available(), args.num_gpus))
     """            
-    writer= SummaryWriter(log_dir="runs/{}".format(args.logdir),comment="visualising losses of training and validation")
+   
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     #device = 'cpu'
     logger.info("Device Type: {}".format(device))
@@ -405,7 +405,8 @@ def _train(args):
     criterion = CELoss().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0.0005)
     LR_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,0.995)
-    
+    writer= SummaryWriter(log_dir="runs/{}".format(args.logdir),comment="visualising losses of training and validation")
+
     for epoch in range(1, args.epochs+1):
         epochtime1=time.time()
         # training phase
