@@ -23,10 +23,11 @@ import pandas as pd
 import time
 #import torchprof
 from torch.utils.tensorboard import SummaryWriter
+import mytransforms
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-writer= SummaryWriter(log_dir="runs/EfficientCFL_300epochs",comment="visualising losses of training and validation")
+
 
 
 eps = 1e-10 #epsilon to improve numerical stability
@@ -142,11 +143,10 @@ class CELoss(nn.Module):
   def forward(self, out, target):
     return self.ce_loss(out, target)
 
-
 class SUN360Dataset(Dataset):
     
 
-    def __init__(self, file, transform=None, target_transform=None):
+    def __init__(self, file, transform=None, target_transform=None, joint_transform=None):
         """
         Args:
             json_file (string): Path to the json file with annotations.
@@ -159,6 +159,7 @@ class SUN360Dataset(Dataset):
         self.images_data = pd.read_json(file)    
         self.transform = transform
         self.target_transform = target_transform
+        self.joint_transform = joint_transform
 
     def __len__(self):
         return len(self.images_data)
@@ -187,14 +188,17 @@ class SUN360Dataset(Dataset):
         
         if self.target_transform is not None:
             CM = self.target_transform(CM)
-            EM = self.target_transform(EM)    
+            EM = self.target_transform(EM)  
+
+        if self.joint_transform is not None:
+            image, EM, CM = joint_transform([image, EM, CM])
 
         return image, EM, CM
 
 class SplitDataset(Dataset):
     
 
-    def __init__(self, dataset, transform=None, target_transform=None):
+    def __init__(self, dataset, transform=None, target_transform=None, joint_transform=None):
         """
         Args:
             json_file (string): Path to the json file with annotations.
@@ -207,6 +211,7 @@ class SplitDataset(Dataset):
         self.images_data = dataset 
         self.transform = transform
         self.target_transform = target_transform
+        self.joint_transform = joint_transform
 
     def __len__(self):
         return len(self.images_data)
@@ -232,6 +237,9 @@ class SplitDataset(Dataset):
         if self.target_transform is not None:
             CM = self.target_transform(CM)
             EM = self.target_transform(EM)    
+        
+        if self.joint_transform is not None:
+            image, EM, CM = joint_transform([image, EM, CM])
 
         return image, EM, CM
 
@@ -312,17 +320,50 @@ def _train(args):
                 dist.get_world_size()) + 'Current host rank is {}. Using cuda: {}. Number of gpus: {}'.format(
                 dist.get_rank(), torch.cuda.is_available(), args.num_gpus))
     """            
-
+    writer= SummaryWriter(log_dir="runs/{}".format(args.logdir),comment="visualising losses of training and validation")
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     #device = 'cpu'
     logger.info("Device Type: {}".format(device))
     img_size = [128,256]
     logger.info("Loading SUN360 dataset")
-    transform = transforms.Compose(
+    """
+    train_transform = transforms.Compose(
+        [transforms.Resize((img_size[0],img_size[1])),
+         transforms.ToTensor(),
+         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+         transforms.Lambda(lambda x : x + torch.randn_like(x))])
+    train_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
+                                           transforms.ToTensor()])
+    """
+    roll_gen = mytransforms.RandomHorizontalRollGenerator()
+    flip_gen = mytransforms.RandomHorizontalFlipGenerator()
+    noiseblur_gen = mytransforms.RandomGaussianNoiseBlurGenerator()
+    train_joint_transform = mytransforms.Compose([[transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1]))],
+                                       [transforms.ColorJitter(brightness=0.2,contrast=0.2,saturation=0.2,hue=0.1), None, None],
+                                       flip_gen,
+                                       [mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen)],
+                                       [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor()],
+                                       [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None],
+                                       roll_gen,
+                                       [mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen)],
+                                       noiseblur_gen,
+                                       [mytransforms.RandomGaussianNoise(noiseblur_gen),mytransforms.RandomGaussianBlur(noiseblur_gen), mytransforms.RandomGaussianBlur(noiseblur_gen)],
+                                       [transforms.RandomErasing(p=0.8,scale=(0.01,0.02),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.8,scale=(0.02,0.03),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.6,scale=(0.03,0.04),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.6,scale=(0.04,0.05),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.4,scale=(0.05,0.06),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.4,scale=(0.06,0.07),ratio=(0.3,3.3),value='random'), None, None], 
+                                       [transforms.RandomErasing(p=0.2,scale=(0.07,0.08),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.2,scale=(0.08,0.09),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.1,scale=(0.09,0.10),ratio=(0.3,3.3),value='random'), None, None],
+                                       [transforms.RandomErasing(p=0.1,scale=(0.1,0.11),ratio=(0.3,3.3),value='random'),  None, None]])                                        
+
+    valid_transform = transforms.Compose(
         [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
+    valid_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
     trainvalidset = SUN360Dataset(file="traindatasmall.json",transform = None, target_transform = None)
@@ -333,11 +374,11 @@ def _train(args):
     train = Subset(trainvalidset, train_idx)
     valid = Subset(trainvalidset, valid_idx)
     
-    trainset = SplitDataset(train, transform = transform, target_transform = target_transform)
+    trainset = SplitDataset(train, transform = None, target_transform = None, joint_transform=train_joint_transform)
     train_loader = DataLoader(trainset, batch_size=args.batch_size,
                                                shuffle=True, num_workers=args.workers)
     
-    validset = SplitDataset(valid, transform = transform, target_transform = target_transform)
+    validset = SplitDataset(valid, transform = valid_transform, target_transform = valid_target_transform)
     valid_loader = DataLoader(validset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers)
      
@@ -353,12 +394,14 @@ def _train(args):
         timeoffset2 = time.time()
         offsetdiff = timeoffset2 - timeoffset1
         model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)    
+        print(model)
+        print (model.parameters())
 
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
+    
     model = model.to(device)
-
     criterion = CELoss().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0.0005)
     LR_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,0.995)
@@ -467,6 +510,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-dir', type=str, default="")
     parser.add_argument('--model-name', type=str,default="efficientnet-b0")
     parser.add_argument('--conv_type', type=str,default="Std", help='select convolution type between Std and Equi. Also determines the network type')
+    parser.add_argument('--logdir', type=str,default="StdConvsCFL_100epochs", help='save directory for tensorboard event files')
     #parser.add_argument('--dist_backend', type=str, default='gloo', help='distributed backend (default: gloo)')
 
     #env = sagemaker_containers.training_env()
