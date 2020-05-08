@@ -80,10 +80,7 @@ class MBConvBlock(nn.Module):
         x = inputs
         if self._block_args.expand_ratio != 1:
             x = self._swish(self._bn0(self._expand_conv(inputs)))
-            if self._conv_type == 'Equi':
-                x = self._swish(self._bn1(self._depthwise_conv(x,offset)))
-            else:
-                x = self._swish(self._bn1(self._depthwise_conv(x)))     
+        x = self._swish(self._bn1(self._depthwise_conv(x)))     
 
         # Squeeze and Excitation
         if self.has_se:
