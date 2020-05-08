@@ -206,6 +206,6 @@ if __name__ == '__main__':
     args = parser.parse_args() 
 
     layerdict,offsetdict = offcalc(batchsize=args.batchsize)
-    torch.save(layerdict,'../layer{}.pt'.format(args.mode))
-    torch.save(offsetdict,'../offset{}.pt'.format(args.mode)) 
+    torch.save(layerdict,'./layer{}.pt'.format(args.mode))
+    torch.save(offsetdict,'./offset{}.pt'.format(args.mode)) 
     
