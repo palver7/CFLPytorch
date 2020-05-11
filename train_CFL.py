@@ -24,6 +24,7 @@ import time
 #import torchprof
 from torch.utils.tensorboard import SummaryWriter
 import mytransforms
+from progressbar import progressbar
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -384,18 +385,10 @@ def _train(args):
      
     logger.info("Model loaded")
     if args.conv_type == "Std":
-        timeoffset1=time.time()                                         
-        timeoffset2 = time.time()
-        offsetdiff = timeoffset2 - timeoffset1
         model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
-    elif args.conv_type == "Equi":
-        timeoffset1=time.time()                                         
+    elif args.conv_type == "Equi":                                       
         layerdict, offsetdict = torch.load('layertrain.pt'), torch.load('offsettrain.pt')
-        timeoffset2 = time.time()
-        offsetdiff = timeoffset2 - timeoffset1
         model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)    
-        print(model)
-        print (model.parameters())
 
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
@@ -405,9 +398,9 @@ def _train(args):
     criterion = CELoss().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0.0005)
     LR_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,0.995)
-    writer= SummaryWriter(log_dir="runs/{}".format(args.logdir),comment="visualising losses of training and validation")
+    writer= SummaryWriter(log_dir="{}".format(args.logdir),comment="visualising losses of training and validation")
 
-    for epoch in range(1, args.epochs+1):
+    for epoch in progressbar(range(1, args.epochs+1),redirect_stdout=True):
         epochtime1=time.time()
         # training phase
         running_loss = 0.0
@@ -436,7 +429,7 @@ def _train(args):
                 running_loss = 0.0
             """
         epoch_loss = running_loss / len(trainset)   
-        #print("train_loss: %.3f" %(epoch_loss))
+        print("epoch: {}".format(epoch),", ","train_loss: %.3f" %(epoch_loss))
         writer.add_scalar("training_loss", epoch_loss,epoch)
     
         # validation phase
@@ -458,7 +451,7 @@ def _train(args):
                     #map_predict(outputs,EM,CM)
                       
                 epoch_loss = running_loss / len(validset)    
-                #print("valid_loss: %.3f" %(epoch_loss))
+                print("epoch: {}".format(epoch),", ""valid_loss: %.3f" %(epoch_loss))
                 writer.add_scalar("validation loss",epoch_loss,epoch)
         if (epoch%100==0):
             _save_model(model, args.model_dir, epoch)        
@@ -466,7 +459,6 @@ def _train(args):
         epochtime2 = time.time()
     epochdiff = epochtime2 - epochtime1          
     writer.close()   
-    print ("time for offset loading: ", offsetdiff)   
     print ("time for 1 complete epoch: ", epochdiff)      
     print('Finished Training')
     

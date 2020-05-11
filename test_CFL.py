@@ -20,7 +20,7 @@ from PIL import Image
 import numpy as np
 import pandas as pd
 from skimage.feature import corner_peaks, peak_local_max
-from CFLPytorch.offsetcalculator import offcalc
+#from CFLPytorch.offsetcalculator import offcalc
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
