@@ -166,8 +166,8 @@ class EfficientNet(nn.Module):
         
         # Final linear layer
         self._avg_pooling = nn.AdaptiveAvgPool2d(1)
-        self._dropout = nn.Dropout(self._global_params.dropout_rate)
-        self._dropout0 = nn.Dropout(p=0.3)
+        self._dropout = nn.Dropout(p=0.7)
+        #self._dropout0 = nn.Dropout(p=self._global_params.dropout_rate)
         self._fc = nn.Linear(out_channels, self._global_params.num_classes)
         self._swish = MemoryEfficientSwish()
 
@@ -199,8 +199,8 @@ class EfficientNet(nn.Module):
 
         # Head
         index+= 1
-        #x = self._swish(self._bn1(self._conv_head(x)))
-        x = self._dropout0(self._bn1(self._conv_head(x)))
+        x = self._swish(self._bn1(self._conv_head(x)))
+        #x = self._dropout0(self._bn1(self._conv_head(x)))
         skipconnection[index] = x
 
         #for key in skipconnection:
@@ -215,13 +215,13 @@ class EfficientNet(nn.Module):
         # Convolution layers
         x, skipdict = self.extract_features(inputs)
         
-        """
+        
         # Pooling and final linear layer
-        x = self._avg_pooling(x)
-        x = x.view(bs, -1)
+        #x = self._avg_pooling(x)
+        #x = x.view(bs, -1)
         x = self._dropout(x)
-        x = self._fc(x)
-        """
+        #x = self._fc(x)
+        
         return x, skipdict
    
     @classmethod
