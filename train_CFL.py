@@ -259,23 +259,23 @@ def map_loss(inputs, EM_gt,CM_gt,criterion):
         CMLoss += criterion(corners,CM)        
     return EMLoss, CMLoss
 
-def convert_to_images(inputs,epoch):
+def convert_to_images(inputs,epoch,phase):
     if not os.path.isdir("CM_pred"):
         os.mkdir("CM_pred")
     if not os.path.isdir("EM_pred"):
-        os.mkdir("EM_pred")    
+        os.mkdir("EM_pred")   
+
+    tojpg = transforms.ToPILImage()    
     output = inputs['output'] + eps
     output = torch.sigmoid(output)
-    edges,corners =torch.chunk(output,2,dim=1)
-    image = corners[0].detach().cpu().numpy() * 255
-    image = image.astype(np.uint8)
-    image = np.squeeze(image)
-    image = Image.fromarray(image)
+    edges,corners = torch.chunk(output,2,dim=1)
+    image = corners[0].detach().cpu()
+    image = torch.squeeze(image)
+    image = tojpg(image)
 
-    image1 = edges[0].detach().cpu().numpy() * 255
-    image1 = image1.astype(np.uint8)
-    image1 = np.squeeze(image1)
-    image1 = Image.fromarray(image1)
+    image1 = edges[0].detach().cpu()
+    image1 = torch.squeeze(image1)
+    image1 = tojpg(image1)
 
     if len(str(epoch)) == 1:
         epochstr = "000" + str(epoch)
@@ -285,8 +285,8 @@ def convert_to_images(inputs,epoch):
         epochstr = "0" + str(epoch)
     else :
         epochstr = str(epoch)            
-    image.save("CM_pred/epoch_ " + epochstr +".jpg")
-    image1.save("EM_pred/epoch_ " + epochstr +".jpg")
+    image.save("CM_pred/epoch_{}_{}_CM.jpg".format(epochstr,phase))
+    image1.save("EM_pred/epoch_{}_{}_EM.jpg".format(epochstr,phase))
 
 def map_predict(outputs, EM_gt,CM_gt):
     '''
@@ -338,27 +338,15 @@ def _train(args):
     """
     roll_gen = mytransforms.RandomHorizontalRollGenerator()
     flip_gen = mytransforms.RandomHorizontalFlipGenerator()
-    noiseblur_gen = mytransforms.RandomGaussianNoiseBlurGenerator()
     train_joint_transform = mytransforms.Compose([[transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1]))],
-                                       [transforms.ColorJitter(brightness=0.2,contrast=0.2,saturation=0.2,hue=0.1), None, None],
                                        flip_gen,
-                                       [mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen)],
+                                       [mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5)],
                                        [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor()],
                                        [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None],
                                        roll_gen,
-                                       [mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen)],
-                                       noiseblur_gen,
-                                       [mytransforms.RandomGaussianNoise(noiseblur_gen),mytransforms.RandomGaussianBlur(noiseblur_gen), mytransforms.RandomGaussianBlur(noiseblur_gen)],
-                                       [transforms.RandomErasing(p=0.8,scale=(0.01,0.02),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.8,scale=(0.02,0.03),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.6,scale=(0.03,0.04),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.6,scale=(0.04,0.05),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.4,scale=(0.05,0.06),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.4,scale=(0.06,0.07),ratio=(0.3,3.3),value='random'), None, None], 
-                                       [transforms.RandomErasing(p=0.2,scale=(0.07,0.08),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.2,scale=(0.08,0.09),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.1,scale=(0.09,0.10),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.1,scale=(0.1,0.11),ratio=(0.3,3.3),value='random'),  None, None]])                                        
+                                       [mytransforms.RandomHorizontalRoll(roll_gen,p=0.5),mytransforms.RandomHorizontalRoll(roll_gen,p=0.5),mytransforms.RandomHorizontalRoll(roll_gen,p=0.5)],
+                                       [transforms.RandomErasing(p=0.5,scale=(0.01,0.02),ratio=(0.3,3.3),value=0), None, None],
+                                       ])                                        
 
     valid_transform = transforms.Compose(
         [transforms.Resize((img_size[0],img_size[1])),
@@ -403,6 +391,7 @@ def _train(args):
     for epoch in progressbar(range(1, args.epochs+1),redirect_stdout=True):
         epochtime1=time.time()
         # training phase
+        phase = 'train'
         running_loss = 0.0
         for i, data in enumerate(train_loader):
             # get the inputs
@@ -415,6 +404,8 @@ def _train(args):
             # forward + backward + optimize
             model.train()
             outputs = model(inputs)
+            if(epoch%10 == 0 and i == 0):
+                convert_to_images(outputs,epoch,phase)
             EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
             loss = EMLoss + CMLoss
             loss.backward()
@@ -429,11 +420,12 @@ def _train(args):
                 running_loss = 0.0
             """
         epoch_loss = running_loss / len(trainset)   
-        print("epoch: {}".format(epoch),", ","train_loss: %.3f" %(epoch_loss))
+        print("epoch: {}".format(epoch),", train_loss: %.3f" %(epoch_loss))
         writer.add_scalar("training_loss", epoch_loss,epoch)
     
         # validation phase
         if(epoch%1==0):
+            phase = 'val'
             with torch.no_grad():
                 running_loss = 0.0
                 for i, data in enumerate(valid_loader):
@@ -442,8 +434,8 @@ def _train(args):
                     inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
                     model.eval()
                     outputs = model(inputs)
-                    if(epoch%100 == 0 and i == 0):
-                        convert_to_images(outputs,epoch)
+                    if(epoch%10 == 0 and i == 0):
+                        convert_to_images(outputs,epoch,phase)
                     EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
                     loss = EMLoss + CMLoss
                     # print statistics
@@ -451,7 +443,7 @@ def _train(args):
                     #map_predict(outputs,EM,CM)
                       
                 epoch_loss = running_loss / len(validset)    
-                print("epoch: {}".format(epoch),", ""valid_loss: %.3f" %(epoch_loss))
+                print("epoch: {}".format(epoch),", valid_loss: %.3f" %(epoch_loss))
                 writer.add_scalar("validation loss",epoch_loss,epoch)
         if (epoch%100==0):
             _save_model(model, args.model_dir, epoch)        
