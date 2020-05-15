@@ -19,6 +19,7 @@ def _iterate_transforms(transforms, x):
 # we can pass nested arrays inside Compose
 # the first level will be applied to all inputs
 # and nested levels are passed to nested transforms
+
 class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
@@ -39,23 +40,28 @@ class RandomHorizontalFlipGenerator(object):
     def __call__(self, img):
         self.apply = random.random()
         return img        
+
 class RandomGaussianNoiseBlurGenerator:
     def __call__(self, img):
         self.apply = random.random()
         self.size = random.randint(1,10)
         return img
+
 class RandomHorizontalRoll(object):
     def __init__(self, gen, p=0.5):
         self.p = p
         self._gen = gen
+    
     def __call__(self, image):
         if self._gen.apply < self.p:
             return  torch.roll(image,self._gen.roll,dims=-1)
         return image
+
 class RandomHorizontalFlip(object):
     def __init__(self, gen, p=0.5):
         self.p = p
         self._gen = gen
+    
     def __call__(self, image):
         if self._gen.apply < self.p:
             return  F.hflip(image)
@@ -68,6 +74,7 @@ class RandomGaussianBlur(object) :
         self.sigma = sigma
         self.dim = dim
         self.channels = channels
+
     def gaussian_kernel(self,size):
         # The gaussian kernel is the product of the gaussian function of each dimension.
         # kernel_size should be an odd number.
@@ -108,10 +115,11 @@ class RandomGaussianBlur(object) :
         return image
 
 class RandomGaussianNoise(object) : 
-    def __init__(self, gen, p=0.5):
+    def __init__(self, gen, p=0.5,alpha=0.1):
         self.p = p
+        self.alpha = alpha
         self._gen = gen
     def __call__(self,image):
         if self._gen.apply < self.p:
-            image = image + torch.randn_like(image)
+            image = image + self.alpha * torch.randn_like(image)
         return image
