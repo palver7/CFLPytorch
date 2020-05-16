@@ -196,6 +196,11 @@ class SUN360Dataset(Dataset):
 
         return image, EM, CM
 
+"""
+The SplitDataset class is used to split training or test set further to make
+train/test/dev or train/val/test split. For SUN360 because of the small size
+only train/test split will be used.
+"""
 class SplitDataset(Dataset):
     
 
@@ -327,15 +332,15 @@ def _train(args):
     logger.info("Device Type: {}".format(device))
     img_size = [128,256]
     logger.info("Loading SUN360 dataset")
-    """
+    
     train_transform = transforms.Compose(
         [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
-         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-         transforms.Lambda(lambda x : x + torch.randn_like(x))])
+         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
     train_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])
-    """
+    
     roll_gen = mytransforms.RandomHorizontalRollGenerator()
     flip_gen = mytransforms.RandomHorizontalFlipGenerator()
     train_joint_transform = mytransforms.Compose([[transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1]))],
@@ -355,19 +360,21 @@ def _train(args):
     valid_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
-    trainvalidset = SUN360Dataset(file="traindatasmall.json",transform = None, target_transform = None)
+    trainset = SUN360Dataset(file="traindatasmall.json",transform = None, target_transform = None, joint_transform=train_joint_transform)
+    """
+    #uncomment this block if train/val split is needed
     indices = list(range(len(trainvalidset)))
     split = int(np.floor(len(trainvalidset)*0.8))
     train_idx = indices[:10]
     valid_idx = indices[10:]
     train = Subset(trainvalidset, train_idx)
     valid = Subset(trainvalidset, valid_idx)
-    
     trainset = SplitDataset(train, transform = None, target_transform = None, joint_transform=train_joint_transform)
+    """
     train_loader = DataLoader(trainset, batch_size=args.batch_size,
                                                shuffle=True, num_workers=args.workers)
     
-    validset = SplitDataset(valid, transform = valid_transform, target_transform = valid_target_transform)
+    validset = SUN360Dataset(file="testdatasmall.json",transform = valid_transform, target_transform = valid_target_transform, joint_transform=None)
     valid_loader = DataLoader(validset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers)
      
