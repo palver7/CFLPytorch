@@ -375,7 +375,7 @@ def _train(args):
     train_loader = DataLoader(trainset, batch_size=args.batch_size-1,
                                                shuffle=True, num_workers=args.workers)
     
-    supplement= SUN360Dataset('morethan4corners.json',transform=train_transform,target_transform=train_target_transform,joint_transform=None)
+    supplement= SUN360Dataset('morethan4corners.json',transform=None,target_transform=None,joint_transform=train_joint_transform)
     suppl_loader = DataLoader(supplement, batch_size=1,
                                                shuffle=True, num_workers=2)
 
