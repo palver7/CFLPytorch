@@ -1,12 +1,11 @@
 import pandas as pd
 import os
-from PIL import Image
-import torchvision.transforms as transforms
-import numpy as np
 
 imgs = os.listdir('trainsmall/RGB')
 CMimgs = os.listdir("trainsmall/CM_gt")
 EMimgs = os.listdir("trainsmall/EM_gt")
+
+
 imgpaths = []
 CMpaths = []
 EMpaths = []
@@ -24,3 +23,28 @@ for EMimg in EMimgs:
 dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths}
 df = pd.DataFrame(data = dict)
 df.to_json("traindatasmall.json")
+
+cornerimages = os.listdir("train/morethan4corners")
+corners=[]
+for item in cornerimages:
+    item=item.split('_')
+    name= item[0]+'_'+item[1]
+    corners.append(name)
+
+imgpaths = []
+CMpaths = []
+EMpaths = []
+root=""
+
+for img in corners:
+    pths = os.path.join(root,"train/RGB/",img+".jpg")
+    imgpaths.append(pths)
+    pths = os.path.join(root,"train/CM_gt/",img+"_CM.jpg")
+    CMpaths.append(pths)
+    pths = os.path.join(root,"train/EM_gt/",img+"_EM.jpg")
+    EMpaths.append(pths)
+    
+  
+dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths}
+df = pd.DataFrame(data = dict)
+df.to_json("morethan4corners.json")

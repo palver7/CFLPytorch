@@ -25,6 +25,7 @@ import time
 from torch.utils.tensorboard import SummaryWriter
 import mytransforms
 from progressbar import progressbar
+import itertools
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -371,9 +372,13 @@ def _train(args):
     valid = Subset(trainvalidset, valid_idx)
     trainset = SplitDataset(train, transform = None, target_transform = None, joint_transform=train_joint_transform)
     """
-    train_loader = DataLoader(trainset, batch_size=args.batch_size,
+    train_loader = DataLoader(trainset, batch_size=args.batch_size-1,
                                                shuffle=True, num_workers=args.workers)
     
+    supplement= SUN360Dataset('morethan4corners.json',transform=train_transform,target_transform=train_target_transform,joint_transform=None)
+    suppl_loader = DataLoader(supplement, batch_size=1,
+                                               shuffle=True, num_workers=2)
+
     validset = SUN360Dataset(file="testdatasmall.json",transform = valid_transform, target_transform = valid_target_transform, joint_transform=None)
     valid_loader = DataLoader(validset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers)
@@ -403,6 +408,14 @@ def _train(args):
         for i, data in enumerate(train_loader):
             # get the inputs
             inputs, EM , CM = data
+            
+            '''this code block is to add one example of a room with 
+            more than 4 floor-ceiling corner pairs to each batch '''
+            RGBsup,EMsup,CMsup = next(itertools.cycle(suppl_loader))
+            inputs = torch.cat([inputs,RGBsup],dim=0)
+            EM = torch.cat([EM,EMsup],dim=0)
+            CM = torch.cat([CM,CMsup],dim=0)
+
             inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
 
             # zero the parameter gradients
