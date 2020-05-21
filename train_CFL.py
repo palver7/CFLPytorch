@@ -368,7 +368,6 @@ def _train(args):
     valid_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
-    trainset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None, joint_transform=train_joint_transform)
     """
     #uncomment this block if train/val split is needed
     indices = list(range(len(trainvalidset)))
@@ -379,6 +378,7 @@ def _train(args):
     valid = Subset(trainvalidset, valid_idx)
     trainset = SplitDataset(train, transform = None, target_transform = None, joint_transform=train_joint_transform)
     """
+    trainset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None, joint_transform=train_joint_transform)
     train_loader = DataLoader(trainset, batch_size=args.batch_size-1,
                                                shuffle=True, num_workers=args.workers)
     
@@ -537,4 +537,3 @@ if __name__ == '__main__':
     diff = time2 - time1
     print("total execution time: ",diff," seconds")
     print("total execution time: ",diff/60," minutes")
-    
