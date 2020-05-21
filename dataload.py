@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-
+"""
 imgs = os.listdir('test/RGB')
 CMimgs = os.listdir("test/CM_gt")
 EMimgs = os.listdir("test/EM_gt")
@@ -29,8 +29,8 @@ for corlab in corlabs:
 dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths, 'CL' : corlabpaths}
 df = pd.DataFrame(data = dict)
 df.to_json("testdata.json")
-
 """
+
 cornerimages = os.listdir("train/morethan4corners")
 corners=[]
 for item in cornerimages:
@@ -41,6 +41,7 @@ for item in cornerimages:
 imgpaths = []
 CMpaths = []
 EMpaths = []
+corlabpaths=[]
 root=""
 
 for img in corners:
@@ -50,9 +51,10 @@ for img in corners:
     CMpaths.append(pths)
     pths = os.path.join(root,"train/EM_gt/",img+"_EM.jpg")
     EMpaths.append(pths)
+    pths = os.path.join(root,"train/corner_labels/",img+".txt")
+    corlabpaths.append(pths)
     
   
-dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths}
+dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths, 'CL' : corlabpaths}
 df = pd.DataFrame(data = dict)
 df.to_json("morethan4corners.json")
-"""
