@@ -86,7 +86,7 @@ def evaluate(pred, gt):
 class SUN360Dataset(Dataset):
     
 
-    def __init__(self, json_file, transform=None, target_transform=None):
+    def __init__(self, file, transform=None, target_transform=None, joint_transform=None):
         """
         Args:
             json_file (string): Path to the json file with annotations.
@@ -95,9 +95,11 @@ class SUN360Dataset(Dataset):
             target_file (callable, optional): Optional transform to be applied
                 on a map (edge and corner).    
         """
-        self.images_data = pd.read_json(json_file)
+    
+        self.images_data = pd.read_json(file)    
         self.transform = transform
         self.target_transform = target_transform
+        self.joint_transform = joint_transform
 
     def __len__(self):
         return len(self.images_data)
@@ -109,9 +111,15 @@ class SUN360Dataset(Dataset):
         img_name = self.images_data.iloc[idx, 0]                        
         EM_name = self.images_data.iloc[idx, 1]
         CM_name = self.images_data.iloc[idx, 2]
+        CL_name = self.images_data.iloc[idx, 3]
         image = Image.open(img_name)
         EM = Image.open(EM_name)
         CM = Image.open(CM_name)
+        with open(CL_name, mode='r') as f:
+            cor = np.array([line.strip().split() for line in f], np.int32)
+        if(len(cor)%2 != 0) :
+            print (CL_name.split('/')[-1])    
+        
         """
         EM = np.asarray(EM)
         EM = np.expand_dims(EM, axis=2)
@@ -126,9 +134,11 @@ class SUN360Dataset(Dataset):
         
         if self.target_transform is not None:
             CM = self.target_transform(CM)
-            EM = self.target_transform(EM)    
-
-        return image, EM, CM
+            EM = self.target_transform(EM)
+        if self.joint_transform is not None:   
+            image, EM, CM, cor = self.joint_transform([image, EM, CM, cor])      
+        
+        return image, EM, CM, cor
 
 
 def corners_2_xy(outputs):
@@ -237,7 +247,7 @@ def _test(args):
         Pc, Rc, Accc, f1c, IoUc = [], [], [], [], []
         for i, data in enumerate(test_loader):
             # get the inputs
-            inputs, EM , CM = data
+            inputs, EM , CM, CL = data
             inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
             model.eval()
             outputs = model(inputs)

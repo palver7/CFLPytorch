@@ -173,9 +173,15 @@ class SUN360Dataset(Dataset):
         img_name = self.images_data.iloc[idx, 0]                        
         EM_name = self.images_data.iloc[idx, 1]
         CM_name = self.images_data.iloc[idx, 2]
+        CL_name = self.images_data.iloc[idx, 3]
         image = Image.open(img_name)
         EM = Image.open(EM_name)
         CM = Image.open(CM_name)
+        with open(CL_name, mode='r') as f:
+            cor = np.array([line.strip().split() for line in f], np.int32)
+        if(len(cor)%2 != 0) :
+            print (CL_name.split('/')[-1])    
+        
         """
         EM = np.asarray(EM)
         EM = np.expand_dims(EM, axis=2)
@@ -190,13 +196,11 @@ class SUN360Dataset(Dataset):
         
         if self.target_transform is not None:
             CM = self.target_transform(CM)
-            EM = self.target_transform(EM)  
-
-        if self.joint_transform is not None:
-            image, EM, CM = self.joint_transform([image, EM, CM])
-
-        return image, EM, CM
-
+            EM = self.target_transform(EM)
+        if self.joint_transform is not None:   
+            image, EM, CM, cor = self.joint_transform([image, EM, CM, cor])      
+        
+        return image, EM, CM, cor
 """
 The SplitDataset class is used to split training or test set further to make
 train/test/dev or train/val/test split. For SUN360 because of the small size
@@ -344,14 +348,17 @@ def _train(args):
     
     roll_gen = mytransforms.RandomHorizontalRollGenerator()
     flip_gen = mytransforms.RandomHorizontalFlipGenerator()
-    train_joint_transform = mytransforms.Compose([[transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1]))],
+    panostretch_gen = mytransforms.RandomPanoStretchGenerator(max_stretch = 2.0)
+    train_joint_transform = mytransforms.Compose([panostretch_gen,
+                                       [mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), None],
+                                       [transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),None],
                                        flip_gen,
-                                       [mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5)],
-                                       [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor()],
-                                       [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None],
+                                       [mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5), None],
+                                       [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor(), None],
+                                       [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None, None],
                                        roll_gen,
-                                       [mytransforms.RandomHorizontalRoll(roll_gen,p=0.5),mytransforms.RandomHorizontalRoll(roll_gen,p=0.5),mytransforms.RandomHorizontalRoll(roll_gen,p=0.5)],
-                                       [transforms.RandomErasing(p=0.5,scale=(0.01,0.02),ratio=(0.3,3.3),value=0), None, None],
+                                       [mytransforms.RandomHorizontalRoll(roll_gen,p=0.5),mytransforms.RandomHorizontalRoll(roll_gen,p=0.5),mytransforms.RandomHorizontalRoll(roll_gen,p=0.5),None],
+                                       [transforms.RandomErasing(p=0.5,scale=(0.01,0.02),ratio=(0.3,3.3),value=0), None, None, None],
                                        ])                                        
 
     valid_transform = transforms.Compose(
@@ -361,7 +368,7 @@ def _train(args):
     valid_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
-    trainset = SUN360Dataset(file="traindatasmall.json",transform = None, target_transform = None, joint_transform=train_joint_transform)
+    trainset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None, joint_transform=train_joint_transform)
     """
     #uncomment this block if train/val split is needed
     indices = list(range(len(trainvalidset)))
@@ -407,7 +414,7 @@ def _train(args):
         running_loss = 0.0
         for i, data in enumerate(train_loader):
             # get the inputs
-            inputs, EM , CM = data
+            inputs, EM , CM, CL = data
             
             '''this code block is to add one example of a room with 
             more than 4 floor-ceiling corner pairs to each batch '''

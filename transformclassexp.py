@@ -41,9 +41,15 @@ class SUN360Dataset(Dataset):
         img_name = self.images_data.iloc[idx, 0]                        
         EM_name = self.images_data.iloc[idx, 1]
         CM_name = self.images_data.iloc[idx, 2]
+        CL_name = self.images_data.iloc[idx, 3]
         image = Image.open(img_name)
         EM = Image.open(EM_name)
         CM = Image.open(CM_name)
+        with open(CL_name, mode='r') as f:
+            cor = np.array([line.strip().split() for line in f], np.int32)
+        if(len(cor)%2 != 0) :
+            print (CL_name.split('/')[-1])    
+        
         """
         EM = np.asarray(EM)
         EM = np.expand_dims(EM, axis=2)
@@ -60,9 +66,9 @@ class SUN360Dataset(Dataset):
             CM = self.target_transform(CM)
             EM = self.target_transform(EM)
         if self.joint_transform is not None:   
-            image, EM, CM = self.joint_transform([image, EM, CM])      
+            image, EM, CM, cor = self.joint_transform([image, EM, CM, cor])      
         
-        return image, EM, CM
+        return image, EM, CM, cor
 
 class SplitDataset(Dataset):
     
@@ -119,27 +125,18 @@ class RandomHorizontalRoll(object):
 #target_transform = transforms.Compose([transforms.ToTensor()])
 roll_gen = mytransforms.RandomHorizontalRollGenerator()
 flip_gen = mytransforms.RandomHorizontalFlipGenerator()
-noiseblur_gen = mytransforms.RandomGaussianNoiseBlurGenerator()
-joint_transform = mytransforms.Compose([[transforms.ColorJitter(brightness=0.2,contrast=0.2,saturation=0.2,hue=0.1), None, None],
+panostretch_gen = mytransforms.RandomPanoStretchGenerator(max_stretch = 2.0)
+joint_transform = mytransforms.Compose([panostretch_gen,
+                                       [mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), None],
                                        flip_gen,
-                                       [mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen)],
-                                       [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor()],
+                                       [mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen),mytransforms.RandomHorizontalFlip(flip_gen), None],
+                                       [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor(), None],
                                        roll_gen,
-                                       [mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen)],
-                                       noiseblur_gen,
-                                       [mytransforms.RandomGaussianNoise(noiseblur_gen),mytransforms.RandomGaussianBlur(noiseblur_gen), mytransforms.RandomGaussianBlur(noiseblur_gen)],
-                                       [transforms.RandomErasing(p=0.8,scale=(0.01,0.02),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.8,scale=(0.02,0.03),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.6,scale=(0.03,0.04),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.6,scale=(0.04,0.05),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.4,scale=(0.05,0.06),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.4,scale=(0.06,0.07),ratio=(0.3,3.3),value='random'), None, None], 
-                                       [transforms.RandomErasing(p=0.2,scale=(0.07,0.08),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.2,scale=(0.08,0.09),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.1,scale=(0.09,0.10),ratio=(0.3,3.3),value='random'), None, None],
-                                       [transforms.RandomErasing(p=0.1,scale=(0.1,0.11),ratio=(0.3,3.3),value='random'),  None, None]])
+                                       [mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen),mytransforms.RandomHorizontalRoll(roll_gen), None],
+                                       [transforms.RandomErasing(p=0.5,value=0), None, None, None],
+                                       ])
 
-trainset = SUN360Dataset(file="traindatasmall.json",transform = None, target_transform = None, joint_transform=joint_transform)
+trainset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None, joint_transform=joint_transform)
 train_loader = DataLoader(trainset, batch_size=1,
                                                shuffle=True, num_workers=2)    
 topil=transforms.ToPILImage()
@@ -152,7 +149,7 @@ if not os.path.exists('result/CM/'):
     os.makedirs('result/CM/')  
         
 for i, data in enumerate(train_loader):
-    images, EM, CM = data 
+    images, EM, CM, cor = data 
     images, EM, CM = torch.squeeze(images), torch.squeeze(EM), torch.squeeze(CM)
     im,edges,corners = topil(images), topil(EM), topil(CM)
     if len (str(i))<2:

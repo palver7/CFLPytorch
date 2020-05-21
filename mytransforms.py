@@ -6,6 +6,8 @@ from PIL import Image, ImageOps
 import torch
 import torchvision.transforms.functional as F
 import torch.nn.functional as NF
+import panostretch
+import numpy as np
 
 def _iterate_transforms(transforms, x):
     if isinstance(transforms, collections.Iterable):
@@ -32,7 +34,7 @@ class Compose(object):
 class RandomHorizontalRollGenerator(object):
     def __call__(self, img):
         self.apply = random.random()
-        im,EM,CM =img
+        im,_,_,_ =img
         self.roll=random.randint(-im.shape[-1]//2,im.shape[-1]//2)
         return img
 
@@ -45,6 +47,50 @@ class RandomGaussianNoiseBlurGenerator:
     def __call__(self, img):
         self.apply = random.random()
         self.size = random.randint(1,10)
+        return img
+        
+class RandomPanoStretchGenerator(object):
+    def __init__(self,max_stretch=2.0):
+        self.max_stretch = max_stretch
+
+    def cor2xybound(self, cor):
+        ''' Helper function to clip max/min stretch factor '''
+        corU = cor[0::2]
+        corB = cor[1::2]
+        zU = -50
+        u = panostretch.coorx2u(corU[:, 0])
+        vU = panostretch.coory2v(corU[:, 1])
+        vB = panostretch.coory2v(corB[:, 1])
+
+        x, y = panostretch.uv2xy(u, vU, z=zU)
+        c = np.sqrt(x**2 + y**2)
+        zB = c * np.tan(vB)
+        xmin, xmax = x.min(), x.max()
+        ymin, ymax = y.min(), y.max()
+
+        S = 3 / abs(zB.mean() - zU)
+        dx = [abs(xmin * S), abs(xmax * S)]
+        dy = [abs(ymin * S), abs(ymax * S)]
+
+        return min(dx), min(dy), max(dx), max(dy)
+
+    def __call__(self, img):
+        self.apply = random.random()
+        _,_,_,cor =img
+        self.cor = cor
+        xmin, ymin, xmax, ymax = self.cor2xybound(self.cor)
+        kx = np.random.uniform(1.0, self.max_stretch)
+        ky = np.random.uniform(1.0, self.max_stretch)
+        if np.random.randint(2) == 0:
+            kx = max(1 / kx, min(0.5 / xmin, 1.0))
+        else:
+            kx = min(kx, max(10.0 / xmax, 1.0))
+        if np.random.randint(2) == 0:
+            ky = max(1 / ky, min(0.5 / ymin, 1.0))
+        else:
+            ky = min(ky, max(10.0 / ymax, 1.0))
+        self.kx = kx
+        self.ky = ky    
         return img
 
 class RandomHorizontalRoll(object):
@@ -123,3 +169,24 @@ class RandomGaussianNoise(object) :
         if self._gen.apply < self.p:
             image = image + self.alpha * torch.randn_like(image)
         return image
+
+class RandomPanoStretch(object):
+    def __init__(self, gen, p=0.5):
+        self.p = p
+        self._gen = gen
+    
+    def __call__(self, image):
+        if self._gen.apply < self.p:
+            image = np.asarray(image)
+            if image.ndim < 3:
+                image = np.expand_dims(image,axis=-1)    
+            image, cor = panostretch.pano_stretch(image, self._gen.cor, self._gen.kx, self._gen.ky)
+            image = image.astype(np.uint8)
+            if image.shape[-1] == 1 :
+                image = np.squeeze(image)
+            image = Image.fromarray(image)
+            if image.mode !='RGB':
+                image=image.convert('L')
+
+
+        return image       

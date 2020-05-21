@@ -1,29 +1,36 @@
 import pandas as pd
 import os
 
-imgs = os.listdir('trainsmall/RGB')
-CMimgs = os.listdir("trainsmall/CM_gt")
-EMimgs = os.listdir("trainsmall/EM_gt")
+imgs = os.listdir('test/RGB')
+CMimgs = os.listdir("test/CM_gt")
+EMimgs = os.listdir("test/EM_gt")
+corlabs = os.listdir("test/corner_labels")
 
 
 imgpaths = []
 CMpaths = []
 EMpaths = []
+corlabpaths=[]
 root=""
 #abspth = os.path.abspath(root)
 for img in imgs:
-    pths = os.path.join(root,"trainsmall/RGB/",img)
+    pths = os.path.join(root,"test/RGB/",img)
     imgpaths.append(pths)
 for CMimg in CMimgs:
-    pths = os.path.join(root,"trainsmall/CM_gt/",CMimg)
+    pths = os.path.join(root,"test/CM_gt/",CMimg)
     CMpaths.append(pths)
 for EMimg in EMimgs:
-    pths = os.path.join(root,"trainsmall/EM_gt/",EMimg)
-    EMpaths.append(pths)    
-dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths}
+    pths = os.path.join(root,"test/EM_gt/",EMimg)
+    EMpaths.append(pths)
+for corlab in corlabs:
+    pths = os.path.join(root,"test/corner_labels/",corlab)
+    corlabpaths.append(pths)       
+  
+dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths, 'CL' : corlabpaths}
 df = pd.DataFrame(data = dict)
-df.to_json("traindatasmall.json")
+df.to_json("testdata.json")
 
+"""
 cornerimages = os.listdir("train/morethan4corners")
 corners=[]
 for item in cornerimages:
@@ -48,3 +55,4 @@ for img in corners:
 dict={'images' : imgpaths, 'EM' : EMpaths, 'CM' : CMpaths}
 df = pd.DataFrame(data = dict)
 df.to_json("morethan4corners.json")
+"""
