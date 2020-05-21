@@ -200,7 +200,7 @@ class SUN360Dataset(Dataset):
         if self.joint_transform is not None:   
             image, EM, CM, cor = self.joint_transform([image, EM, CM, cor])      
         
-        return image, EM, CM, cor
+        return image, EM, CM
 """
 The SplitDataset class is used to split training or test set further to make
 train/test/dev or train/val/test split. For SUN360 because of the small size
@@ -414,7 +414,7 @@ def _train(args):
         running_loss = 0.0
         for i, data in enumerate(train_loader):
             # get the inputs
-            inputs, EM , CM, CL = data
+            inputs, EM , CM = data
             
             '''this code block is to add one example of a room with 
             more than 4 floor-ceiling corner pairs to each batch '''

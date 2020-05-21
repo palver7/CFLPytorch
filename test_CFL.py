@@ -138,7 +138,7 @@ class SUN360Dataset(Dataset):
         if self.joint_transform is not None:   
             image, EM, CM, cor = self.joint_transform([image, EM, CM, cor])      
         
-        return image, EM, CM, cor
+        return image, EM, CM
 
 
 def corners_2_xy(outputs):
@@ -247,7 +247,7 @@ def _test(args):
         Pc, Rc, Accc, f1c, IoUc = [], [], [], [], []
         for i, data in enumerate(test_loader):
             # get the inputs
-            inputs, EM , CM, CL = data
+            inputs, EM , CM = data
             inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
             model.eval()
             outputs = model(inputs)
