@@ -12,6 +12,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils import model_zoo
 from torchvision.ops.deform_conv import deform_conv2d, DeformConv2d 
+from DCNv2.dcn_v2 import DCN
 
 ########################################################################
 ############### HELPERS FUNCTIONS FOR MODEL ARCHITECTURE ###############
@@ -124,8 +125,10 @@ class EquiConv2dDynamicSamePadding(DeformConv2d):
         if x.shape[0] != offset.shape[0] :
             sizediff = offset.shape[0] - x.shape[0]
             offset = torch.split(offset,[x.shape[0],sizediff],dim=0)
-            offset = offset[0]   
-        return deform_conv2d(x, offset, self.weight, self.bias, self.stride, self.padding, self.dilation)
+            offset = offset[0]
+        defconv2 = DCN(self.in_channels, self.out_channels, self.kernel_size, self.stride, self.padding, self.dilation, self.groups)
+        #deform_conv2d(x, offset, self.weight, self.bias, self.stride, self.padding, self.dilation)
+        return defconv2(x,offset)
 
 
 class EquiConv2dStaticSamePadding(DeformConv2d):
@@ -154,7 +157,9 @@ class EquiConv2dStaticSamePadding(DeformConv2d):
             sizediff = offset.shape[0] - x.shape[0]
             offset = torch.split(offset,[x.shape[0],sizediff],dim=0)
             offset = offset[0]    
-        x = deform_conv2d(x, offset, self.weight, self.bias, self.stride, self.padding, self.dilation)
+        #x = deform_conv2d(x, offset, self.weight, self.bias, self.stride, self.padding, self.dilation)
+        defconv2 = DCN(self.in_channels, self.out_channels, self.kernel_size, self.stride, self.padding, self.dilation, self.groups)
+        x = defconv2(x, offset)
         return x
 
 

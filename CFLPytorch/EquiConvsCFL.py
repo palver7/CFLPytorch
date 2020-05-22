@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from .utils import (
+from utils import (
     round_filters,
     round_repeats,
     drop_connect,
@@ -320,9 +320,8 @@ class EquiConvsCFL(nn.Module):
         return ret
 
 if __name__ == '__main__':
-    from offsetcalculator import offcalc
     input0 = torch.randn(1,3,128,256)
-    layerdict, offsetdict = offcalc(1)
+    layerdict, offsetdict = torch.load('layer.pt'), torch.load('offset.pt')
     model = EquiConvsCFL('efficientnet-b0','Equi', layerdict=layerdict, offsetdict=offsetdict)
     output0 = model(input0)
     print(output0['output'].shape)
