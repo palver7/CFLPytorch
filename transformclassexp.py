@@ -68,7 +68,7 @@ class SUN360Dataset(Dataset):
         if self.joint_transform is not None:   
             image, EM, CM, cor = self.joint_transform([image, EM, CM, cor])      
         
-        return image, EM, CM, cor
+        return image, EM, CM
 
 class SplitDataset(Dataset):
     
@@ -103,23 +103,6 @@ class SplitDataset(Dataset):
         
         return image, EM, CM
 
-class RandomHorizontalRoll(object):
-    """Rescale the image in a sample to a given size.
-
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
-    """
-
-    def __init__(self, p=0.5):
-        self.p = p
-
-    def __call__(self, image):
-        if random.random() < self.p:
-            return  torch.roll(image,random.randint(-image.shape[-1]//2,image.shape[-1]//2),dims=-1)
-        return image    
-    
 
 #transform = transforms.Compose([transforms.ToTensor(),HorizontalRotation()])
 #target_transform = transforms.Compose([transforms.ToTensor()])
