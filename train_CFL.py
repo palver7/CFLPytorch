@@ -1,5 +1,6 @@
 from CFLPytorch.StdConvsCFL import StdConvsCFL
 from CFLPytorch.EquiConvsCFL import EquiConvsCFL
+from CFLPytorch.resnet import StdConvsCFL as Res50StdConvsCFL
 import argparse
 import logging
 #import sagemaker_containers
