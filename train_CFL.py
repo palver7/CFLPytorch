@@ -1,6 +1,5 @@
 from CFLPytorch.StdConvsCFL import StdConvsCFL
 from CFLPytorch.EquiConvsCFL import EquiConvsCFL
-from CFLPytorch.resnet import StdConvsCFL as Res50StdConvsCFL
 import argparse
 import logging
 #import sagemaker_containers
@@ -349,9 +348,10 @@ def _train(args):
     
     roll_gen = mytransforms.RandomHorizontalRollGenerator()
     flip_gen = mytransforms.RandomHorizontalFlipGenerator()
-    panostretch_gen = mytransforms.RandomPanoStretchGenerator(max_stretch = 2.0)
-    train_joint_transform = mytransforms.Compose([panostretch_gen,
-                                       [mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), None],
+    #panostretch_gen = mytransforms.RandomPanoStretchGenerator(max_stretch = 2.0)
+    #panostretch_gen,
+    #[mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), None]
+    train_joint_transform = mytransforms.Compose([
                                        [transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),None],
                                        flip_gen,
                                        [mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5), None],
@@ -380,14 +380,14 @@ def _train(args):
     trainset = SplitDataset(train, transform = None, target_transform = None, joint_transform=train_joint_transform)
     """
     trainset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None, joint_transform=train_joint_transform)
-    train_loader = DataLoader(trainset, batch_size=args.batch_size-1,
+    train_loader = DataLoader(trainset, batch_size=args.batch_size,
                                                shuffle=True, num_workers=args.workers)
     
-    supplement= SUN360Dataset('morethan4corners.json',transform=None,target_transform=None,joint_transform=train_joint_transform)
-    suppl_loader = DataLoader(supplement, batch_size=1,
-                                               shuffle=True, num_workers=2)
+    #supplement= SUN360Dataset('morethan4corners.json',transform=None,target_transform=None,joint_transform=train_joint_transform)
+    #suppl_loader = DataLoader(supplement, batch_size=1,
+    #                                           shuffle=True, num_workers=2)
 
-    validset = SUN360Dataset(file="testdatasmall.json",transform = valid_transform, target_transform = valid_target_transform, joint_transform=None)
+    validset = SUN360Dataset(file="testdata.json",transform = valid_transform, target_transform = valid_target_transform, joint_transform=None)
     valid_loader = DataLoader(validset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers)
      
@@ -416,14 +416,14 @@ def _train(args):
         for i, data in enumerate(train_loader):
             # get the inputs
             inputs, EM , CM = data
-            
+            """
             '''this code block is to add one example of a room with 
             more than 4 floor-ceiling corner pairs to each batch '''
             RGBsup,EMsup,CMsup = next(itertools.cycle(suppl_loader))
             inputs = torch.cat([inputs,RGBsup],dim=0)
             EM = torch.cat([EM,EMsup],dim=0)
             CM = torch.cat([CM,CMsup],dim=0)
-
+            """
             inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
 
             # zero the parameter gradients
@@ -523,7 +523,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-dir', type=str, default="")
     parser.add_argument('--model-name', type=str,default="efficientnet-b0")
     parser.add_argument('--conv_type', type=str,default="Std", help='select convolution type between Std and Equi. Also determines the network type')
-    parser.add_argument('--logdir', type=str,default="StdConvsCFL_100epochs", help='save directory for tensorboard event files')
+    parser.add_argument('--logdir', type=str,default="exp/StdConvsCFL_100epochs", help='save directory for tensorboard event files')
     #parser.add_argument('--dist_backend', type=str, default='gloo', help='distributed backend (default: gloo)')
 
     #env = sagemaker_containers.training_env()
