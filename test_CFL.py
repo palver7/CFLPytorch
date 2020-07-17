@@ -1,5 +1,6 @@
 from CFLPytorch.StdConvsCFL import StdConvsCFL
 from CFLPytorch.EquiConvsCFL import EquiConvsCFL
+from CFLPytorch.resnet import StdConvsCFL as Res50Std 
 import argparse
 import logging
 #import sagemaker_containers
@@ -231,7 +232,8 @@ def _test(args):
     
     logger.info("Model loaded")
     if args.conv_type == "Std":
-        model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
+        #model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
+        model = Res50Std()
     elif args.conv_type == "Equi":                           
         layerdict, offsetdict = torch.load('layertest.pt'), torch.load('offsettest.pt')
         model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)

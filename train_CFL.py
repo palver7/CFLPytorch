@@ -1,5 +1,6 @@
 from CFLPytorch.StdConvsCFL import StdConvsCFL
 from CFLPytorch.EquiConvsCFL import EquiConvsCFL
+from CFLPytorch.resnet import StdConvsCFL as Res50Std
 import argparse
 import logging
 #import sagemaker_containers
@@ -379,7 +380,7 @@ def _train(args):
     valid = Subset(trainvalidset, valid_idx)
     trainset = SplitDataset(train, transform = None, target_transform = None, joint_transform=train_joint_transform)
     """
-    trainset = SUN360Dataset(file="traindata.json",transform = None, target_transform = None, joint_transform=train_joint_transform)
+    trainset = SUN360Dataset(file="traindata.json",transform = train_transform, target_transform = train_target_transform, joint_transform=None)
     train_loader = DataLoader(trainset, batch_size=args.batch_size,
                                                shuffle=True, num_workers=args.workers)
     
@@ -392,19 +393,30 @@ def _train(args):
                                               shuffle=False, num_workers=args.workers)
      
     logger.info("Model loaded")
-    if args.conv_type == "Std":
-        model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
-    elif args.conv_type == "Equi":                                       
-        layerdict, offsetdict = torch.load('layertrain.pt'), torch.load('offsettrain.pt')
-        model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)    
-
-    if torch.cuda.device_count() > 1:
-        logger.info("Gpu count: {}".format(torch.cuda.device_count()))
-        model = nn.DataParallel(model)
+    if args.modelfile is None:
+        if args.conv_type == "Std":
+            #model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
+            model = Res50Std()
+        elif args.conv_type == "Equi":                                       
+            layerdict, offsetdict = torch.load('layertrain.pt'), torch.load('offsettrain.pt')
+            model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)    
+        if torch.cuda.device_count() > 1:
+            logger.info("Gpu count: {}".format(torch.cuda.device_count()))
+            model = nn.DataParallel(model)
+    else:    
+        model = model_fn(args.model_dir,args.model_name, args.conv_type, args.modelfile)
+        print("resuming from a saved model")   
+    #ct = 0
+    #for child in model.children():
+    #    ct+=1
+    #    if ct == 1 :
+    #        for param in child.parameters():
+    #            param.requires_grad = False
     
     model = model.to(device)
     criterion = CELoss().to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0.0005)
+    WDecay = 5e-4
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0)
     LR_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,0.995)
     writer= SummaryWriter(log_dir="{}".format(args.logdir),comment="visualising losses of training and validation")
 
@@ -432,10 +444,19 @@ def _train(args):
             # forward + backward + optimize
             model.train()
             outputs = model(inputs)
+            
+            l2_reg = None
+            for W in model.parameters():
+                if l2_reg is None:
+                    l2_reg = W.norm(2)**2
+                else:
+                    l2_reg = l2_reg + W.norm(2)**2
+                    
             if(epoch%10 == 0 and i == 0):
                 convert_to_images(outputs,epoch,phase)
             EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
-            loss = EMLoss + CMLoss
+            #loss = EMLoss + CMLoss
+            loss = EMLoss + CMLoss + WDecay * l2_reg
             loss.backward()
             optimizer.step()
 
@@ -462,10 +483,19 @@ def _train(args):
                     inputs, EM, CM = inputs.to(device), EM.to(device), CM.to(device)
                     model.eval()
                     outputs = model(inputs)
+                    
+                    l2_reg = None
+                    for W in model.parameters():
+                        if l2_reg is None:
+                            l2_reg = W.norm(2)**2
+                        else:
+                            l2_reg = l2_reg + W.norm(2)**2
+                        
                     if(epoch%10 == 0 and i == 0):
                         convert_to_images(outputs,epoch,phase)
                     EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
-                    loss = EMLoss + CMLoss
+                    #loss = EMLoss + CMLoss
+                    loss = EMLoss + CMLoss + WDecay * l2_reg
                     # print statistics
                     running_loss += loss.item()
                     #map_predict(outputs,EM,CM)
@@ -493,17 +523,22 @@ def _save_model(model, model_dir, epoch):
     model.cuda()
 
 
-def model_fn(model_dir,model_name):
+def model_fn(model_dir,model_name, conv_type, modelfile):
     logger.info('model_fn')
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = EquiConvsCFL(model_name,conv_type='Equi')
+    #device = "cuda" if torch.cuda.is_available() else "cpu"
+    if conv_type == "Std":
+        #model = StdConvsCFL(model_name,conv_type=conv_type, layerdict=None, offsetdict=None)
+        model = Res50Std()
+    elif conv_type == "Equi":                                       
+        layerdict, offsetdict = torch.load('layertrain.pt'), torch.load('offsettrain.pt')
+        model = EquiConvsCFL(model_name,conv_type=conv_type, layerdict=layerdict, offsetdict=offsetdict)
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
 
-    with open(os.path.join(model_dir, 'model_epoch300.pth'), 'rb') as f:
+    with open(os.path.join(model_dir, modelfile), 'rb') as f:
         model.load_state_dict(torch.load(f))
-    return model.to(device)
+    return model
 
 
 if __name__ == '__main__':
@@ -523,7 +558,8 @@ if __name__ == '__main__':
     parser.add_argument('--model-dir', type=str, default="")
     parser.add_argument('--model-name', type=str,default="efficientnet-b0")
     parser.add_argument('--conv_type', type=str,default="Std", help='select convolution type between Std and Equi. Also determines the network type')
-    parser.add_argument('--logdir', type=str,default="exp/StdConvsCFL_100epochs", help='save directory for tensorboard event files')
+    parser.add_argument('--logdir', type=str,default="", help='save directory for tensorboard event files')
+    parser.add_argument('--modelfile', type=str, default=None, help="load model file for resuming training")
     #parser.add_argument('--dist_backend', type=str, default='gloo', help='distributed backend (default: gloo)')
 
     #env = sagemaker_containers.training_env()

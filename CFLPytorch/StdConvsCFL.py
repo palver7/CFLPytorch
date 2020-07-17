@@ -311,5 +311,3 @@ if __name__ == '__main__':
     model = StdConvsCFL('efficientnet-b0','Std', layerdict=None, offsetdict=None)
     output0 = model(input0)
     print(output0['output'].shape)
-   
- 
