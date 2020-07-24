@@ -176,6 +176,8 @@ class SUN360Dataset(Dataset):
         CM_name = self.images_data.iloc[idx, 2]
         CL_name = self.images_data.iloc[idx, 3]
         image = Image.open(img_name)
+        if image.mode !='RGB' :
+            image = image.convert('RGB')
         EM = Image.open(EM_name)
         CM = Image.open(CM_name)
         with open(CL_name, mode='r') as f:
@@ -406,6 +408,7 @@ def _train(args):
     else:    
         model = model_fn(args.model_dir,args.model_name, args.conv_type, args.modelfile)
         print("resuming from a saved model")   
+    """for freezing encoders"""    
     #ct = 0
     #for child in model.children():
     #    ct+=1
@@ -446,17 +449,18 @@ def _train(args):
             outputs = model(inputs)
             
             l2_reg = None
-            for W in model.parameters():
-                if l2_reg is None:
-                    l2_reg = W.norm(2)**2
-                else:
-                    l2_reg = l2_reg + W.norm(2)**2
+            for name, W in model.named_parameters():
+                if 'weight' in name and 'bn' not in name:
+                    if l2_reg is None:
+                        l2_reg = W.norm(2)**2
+                    else:
+                        l2_reg = l2_reg + W.norm(2)**2
                     
             if(epoch%10 == 0 and i == 0):
                 convert_to_images(outputs,epoch,phase)
             EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
             #loss = EMLoss + CMLoss
-            loss = EMLoss + CMLoss + WDecay * l2_reg
+            loss = EMLoss + CMLoss + WDecay * 0.5 * l2_reg
             loss.backward()
             optimizer.step()
 
@@ -485,17 +489,18 @@ def _train(args):
                     outputs = model(inputs)
                     
                     l2_reg = None
-                    for W in model.parameters():
-                        if l2_reg is None:
-                            l2_reg = W.norm(2)**2
-                        else:
-                            l2_reg = l2_reg + W.norm(2)**2
+                    for name, W in model.named_parameters():
+                        if 'weight' in name and 'bn' not in name:
+                            if l2_reg is None:
+                                l2_reg = W.norm(2)**2
+                            else:
+                                l2_reg = l2_reg + W.norm(2)**2
                         
                     if(epoch%10 == 0 and i == 0):
                         convert_to_images(outputs,epoch,phase)
                     EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
                     #loss = EMLoss + CMLoss
-                    loss = EMLoss + CMLoss + WDecay * l2_reg
+                    loss = EMLoss + CMLoss + WDecay * 0.5 * l2_reg
                     # print statistics
                     running_loss += loss.item()
                     #map_predict(outputs,EM,CM)

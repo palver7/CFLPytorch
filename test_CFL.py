@@ -114,6 +114,8 @@ class SUN360Dataset(Dataset):
         CM_name = self.images_data.iloc[idx, 2]
         CL_name = self.images_data.iloc[idx, 3]
         image = Image.open(img_name)
+        if image.mode != 'RGB' :
+            image = image.convert('RGB')
         EM = Image.open(EM_name)
         CM = Image.open(CM_name)
         with open(CL_name, mode='r') as f:
