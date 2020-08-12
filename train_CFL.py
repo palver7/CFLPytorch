@@ -458,7 +458,7 @@ def _train(args):
             
             l2_reg = None
             for name, W in model.named_parameters():
-                if 'weight' in name and 'bn' not in name:
+                if 'weight' in name:
                     if l2_reg is None:
                         l2_reg = W.norm(2)**2
                     else:
@@ -507,7 +507,7 @@ def _train(args):
                     
                     l2_reg = None
                     for name, W in model.named_parameters():
-                        if 'weight' in name and 'bn' not in name:
+                        if 'weight' in name:
                             if l2_reg is None:
                                 l2_reg = W.norm(2)**2
                             else:
