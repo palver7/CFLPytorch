@@ -156,8 +156,8 @@ class ResNet(nn.Module):
                                        dilate=replace_stride_with_dilation[1],layer_index=3)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2],layer_index=4)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        #self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        #self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -241,6 +241,10 @@ def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     if pretrained:
         state_dict = load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
+        model_dict = model.state_dict()
+        # filter out unnecessary keys
+        state_dict = {k: v for k, v in state_dict.items() if k in model_dict}
+                                             
         model.load_state_dict(state_dict)
     return model
 
@@ -376,13 +380,13 @@ class StdConvsCFL(nn.Module):
         
         # Decoder layer
         self._upconv1a = nn.ConvTranspose2d(2048, 512, kernel_size=5, bias=True, stride=2, padding=2, output_padding=1)
-        self._upconv1b = nn.ConvTranspose2d(1536, 512, kernel_size=5, bias=True, stride=2, padding=2, output_padding=1)
-        self._upconv1c = nn.ConvTranspose2d(512, 2, kernel_size=3, bias=True, stride=1, padding=1)
-        self._upconv2a = nn.ConvTranspose2d(1026, 256, kernel_size=5, bias=True, stride=2, padding=2, output_padding=1)
-        self._upconv2b = nn.ConvTranspose2d(256, 2, kernel_size=3, bias=True, stride=1, padding=1)
-        self._upconv3a = nn.ConvTranspose2d(514, 128, kernel_size=5, bias=True, stride=2,  padding=2, output_padding=1)
-        self._upconv3b = nn.ConvTranspose2d(128, 2, kernel_size=3, bias=True, stride=1, padding=1)
-        self._upconv4a = nn.ConvTranspose2d(194, 64, kernel_size=3, bias=True, stride=1, padding=1)
+        self._upconv1b = nn.ConvTranspose2d(1536, 256, kernel_size=5, bias=True, stride=2, padding=2, output_padding=1)
+        self._upconv1c = nn.ConvTranspose2d(256, 2, kernel_size=3, bias=True, stride=1, padding=1)
+        self._upconv2a = nn.ConvTranspose2d(770, 128, kernel_size=5, bias=True, stride=2, padding=2, output_padding=1)
+        self._upconv2b = nn.ConvTranspose2d(128, 2, kernel_size=3, bias=True, stride=1, padding=1)
+        self._upconv3a = nn.ConvTranspose2d(386, 64, kernel_size=5, bias=True, stride=2,  padding=2, output_padding=1)
+        self._upconv3b = nn.ConvTranspose2d(64, 2, kernel_size=3, bias=True, stride=1, padding=1)
+        self._upconv4a = nn.ConvTranspose2d(130, 64, kernel_size=3, bias=True, stride=1, padding=1)
         self._upconv4b = nn.ConvTranspose2d(64, 2, kernel_size=3, bias=True, stride=1, padding=1)
 
     def forward(self, inputs):
