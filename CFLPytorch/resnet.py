@@ -242,10 +242,13 @@ def _resnet(arch, block, layers, pretrained, progress, **kwargs):
         state_dict = load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
         model_dict = model.state_dict()
-        # filter out unnecessary keys
+        # 1. filter out unnecessary keys
         state_dict = {k: v for k, v in state_dict.items() if k in model_dict}
-                                             
-        model.load_state_dict(state_dict)
+        # 2. overwrite entries in the existing state dict
+        model_dict.update(state_dict)
+        # 3. load the new state dict
+        model.load_state_dict(model_dict)
+
     return model
 
 
