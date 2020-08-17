@@ -1,6 +1,7 @@
 from CFLPytorch.StdConvsCFL import StdConvsCFL
 from CFLPytorch.EquiConvsCFL import EquiConvsCFL
 from CFLPytorch.resnet import StdConvsCFL as Res50Std 
+from CFLPytorch.StdConvsTFCFL import StdConvsTFCFL
 import argparse
 import logging
 #import sagemaker_containers
@@ -114,7 +115,7 @@ class SUN360Dataset(Dataset):
         CM_name = self.images_data.iloc[idx, 2]
         CL_name = self.images_data.iloc[idx, 3]
         image = Image.open(img_name)
-        if image.mode != 'RGB' :
+        if image.mode !='RGB' :
             image = image.convert('RGB')
         EM = Image.open(EM_name)
         CM = Image.open(CM_name)
@@ -223,7 +224,7 @@ def _test(args):
     transform = transforms.Compose(
         [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
-         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+         transforms.Normalize(mean=[0.485, 0.458, 0.408], std=[1.0, 1.0, 1.0])])
     target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
@@ -235,11 +236,20 @@ def _test(args):
     logger.info("Model loaded")
     if args.conv_type == "Std":
         #model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
-        model = Res50Std()
+        #model = Res50Std()
+        model = StdConvsTFCFL()
     elif args.conv_type == "Equi":                           
         layerdict, offsetdict = torch.load('layertest.pt'), torch.load('offsettest.pt')
         model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)
-    model.load_state_dict(torch.load(args.modelfile))
+    #model.load_state_dict(torch.load(args.modelfile))
+    pretrained_dict = torch.load(args.modelfile)
+    model_dict = model.state_dict()
+    # 1. filter out unnecessary keys
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    # 2. overwrite entries in the existing state dict
+    model_dict.update(pretrained_dict)
+    # 3. load the new state dict
+    model.load_state_dict(model_dict)
 
     if torch.cuda.device_count() > 1:
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
