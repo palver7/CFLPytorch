@@ -283,25 +283,25 @@ class StdConvsCFL(nn.Module):
         d_concat_2x = torch.cat((d_2x,skipconnection[connection]),dim=1)
         d_4x = self._swish(self._upconv1b(d_concat_2x))    
         output4x_likelihood = self._upconv1c(d_4x)    
-        ret['output4x'] = output4x_likelihood
+        ret['output4x_likelihood'] = output4x_likelihood
 
         connection = 5
         d_concat_4x = torch.cat((d_4x,skipconnection[connection],output4x_likelihood),dim=1)
         d_8x = self._swish(self._upconv2a(d_concat_4x))    
         output8x_likelihood = self._upconv2b(d_8x)
-        ret['output8x'] = output8x_likelihood
+        ret['output8x_likelihood'] = output8x_likelihood
         
         connection = 3
         d_concat_8x = torch.cat((d_8x,skipconnection[connection],output8x_likelihood),dim=1)
         d_16x = self._swish(self._upconv3a(d_concat_8x)) 
         output16x_likelihood = self._upconv3b(d_16x)  
-        ret['output16x'] = output16x_likelihood
+        ret['output16x_likelihood'] = output16x_likelihood
         
         connection = 1
         d_concat_16x = torch.cat((d_16x,skipconnection[connection],output16x_likelihood),dim=1)
         d_16x_conv1 = self._swish(self._upconv4a(d_concat_16x))
         output_likelihood = self._upconv4b(d_16x_conv1)    
-        ret['output'] = output_likelihood
+        ret['output_likelihood'] = output_likelihood
 
         return ret
     
