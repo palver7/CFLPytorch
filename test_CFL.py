@@ -171,11 +171,11 @@ def map_predict(outputs, EM_gt,CM_gt):
     '''
     function to calculate total loss according to CFL paper
     '''
-    output= outputs['output'] + eps
-    output = torch.sigmoid(output)
-    EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
-    CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
+    output= outputs['output_likelihood']
     edges,corners =torch.chunk(output,2,dim=1)
+    EM,CM = torch.sigmoid(edges), torch.sigmoid(corners)
+    #EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
+    #CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     #edges,corners = torch.squeeze(edges,dim=1), torch.squeeze(corners,dim=1) 
     #EM,CM = torch.squeeze(EM,dim=1), torch.squeeze(CM,dim=1)
     P_e, R_e, Acc_e, f1_e, IoU_e = evaluate(edges,EM)
@@ -220,12 +220,13 @@ def _test(args):
     
     logger.info("Device Type: {}".format(device))
     img_size= [128,256]
+    pred_size = [64,128]
     logger.info("Loading SUN360 dataset")
     transform = transforms.Compose(
         [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.458, 0.408], std=[1.0, 1.0, 1.0])])
-    target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
+    target_transform = transforms.Compose([transforms.Resize((pred_size[0],pred_size[1])),
                                            transforms.ToTensor()])     
 
     testset = SUN360Dataset("testdata.json",transform = transform, target_transform = target_transform)
@@ -236,8 +237,8 @@ def _test(args):
     logger.info("Model loaded")
     if args.conv_type == "Std":
         #model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
-        #model = Res50Std()
-        model = StdConvsTFCFL()
+        model = Res50Std()
+        #model = StdConvsTFCFL()
     elif args.conv_type == "Equi":                           
         layerdict, offsetdict = torch.load('layertest.pt'), torch.load('offsettest.pt')
         model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)
