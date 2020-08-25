@@ -289,7 +289,7 @@ class EquiConvsCFL(nn.Module):
         d_4x = F.interpolate(d_4x_ec, scale_factor=2, mode="bilinear", align_corners=True) 
         layer = index+3
         output4x_likelihood = self._conv1c(d_4x,self._offsetdict[self._layerdict[layer]].to(x.device))
-        ret['output4x'] = output4x_likelihood
+        ret['output4x_likelihood'] = output4x_likelihood
 
         connection = 5
         d_concat_4x = torch.cat((d_4x,skipconnection[connection],output4x_likelihood),dim=1)
@@ -298,7 +298,7 @@ class EquiConvsCFL(nn.Module):
         d_8x = F.interpolate(d_8x_ec, scale_factor=2, mode="bilinear", align_corners=True)
         layer = index+5 
         output8x_likelihood = self._conv2b(d_8x,self._offsetdict[self._layerdict[layer]].to(x.device))
-        ret['output8x'] = output8x_likelihood
+        ret['output8x_likelihood'] = output8x_likelihood
         
         connection = 3
         d_concat_8x = torch.cat((d_8x,skipconnection[connection],output8x_likelihood),dim=1)
@@ -307,7 +307,7 @@ class EquiConvsCFL(nn.Module):
         d_16x = F.interpolate(d_16x_ec, scale_factor=2, mode="bilinear", align_corners=True)
         layer = index+7 
         output16x_likelihood = self._conv3b(d_16x,self._offsetdict[self._layerdict[layer]].to(x.device))
-        ret['output16x'] = output16x_likelihood
+        ret['output16x_likelihood'] = output16x_likelihood
         
         connection = 1
         d_concat_16x = torch.cat((d_16x,skipconnection[connection],output16x_likelihood),dim=1)
@@ -315,7 +315,7 @@ class EquiConvsCFL(nn.Module):
         d_16x_conv1 = self._swish(self._conv4a(d_concat_16x,self._offsetdict[self._layerdict[layer]].to(x.device)))
         layer = index+9 
         output_likelihood = self._conv4b(d_16x_conv1,self._offsetdict[self._layerdict[layer]].to(x.device))
-        ret['output'] = output_likelihood
+        ret['output_likelihood'] = output_likelihood
         
         return ret
 
