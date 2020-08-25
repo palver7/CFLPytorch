@@ -250,7 +250,7 @@ class SplitDataset(Dataset):
         """
         
         if self.transform is not None:
-            image = self.transform(image)
+            image = self.transform(image)     
         
         if self.target_transform is not None:
             CM = self.target_transform(CM)
@@ -268,7 +268,7 @@ def map_loss(inputs, EM_gt,CM_gt,criterion):
     EMLoss=0.
     CMLoss=0.
     for key in inputs:
-        output = inputs[key] + eps
+        output = inputs[key]
         EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
         CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
         edges,corners =torch.chunk(output,2,dim=1)
@@ -309,11 +309,11 @@ def map_predict(outputs, EM_gt,CM_gt):
     '''
     function to calculate total loss according to CFL paper
     '''
-    output= outputs['output'] + eps
-    output = torch.sigmoid(output)
-    EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
-    CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
+    output= outputs['output_likelihood']
     edges,corners =torch.chunk(output,2,dim=1)
+    EM, CM = torch.sigmoid(edges), torch.sigmoid(corners)
+    #EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
+    #CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     IoU_e = evaluate(edges,EM)
     IoU_c = evaluate(corners, CM)
     #P_e, R_e, Acc_e, f1_e, IoU_e = evaluate(edges,EM)
@@ -346,6 +346,7 @@ def _train(args):
     #device = 'cpu'
     logger.info("Device Type: {}".format(device))
     img_size = [128,256]
+    pred_size = [64,128]
     logger.info("Loading SUN360 dataset")
     
     train_transform = transforms.Compose(
@@ -353,16 +354,17 @@ def _train(args):
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.458, 0.408], std=[1.0, 1.0, 1.0])
         ])
-    train_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
+    train_target_transform = transforms.Compose([transforms.Resize((pred_size[0],pred_size[1])),
                                            transforms.ToTensor()])
     
     roll_gen = mytransforms.RandomHorizontalRollGenerator()
     flip_gen = mytransforms.RandomHorizontalFlipGenerator()
-    #panostretch_gen = mytransforms.RandomPanoStretchGenerator(max_stretch = 2.0)
-    #panostretch_gen,
-    #[mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), None]
+    panostretch_gen = mytransforms.RandomPanoStretchGenerator(max_stretch = 2.0)
+    
     train_joint_transform = mytransforms.Compose([
-                                       [transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),None],
+                                       panostretch_gen,
+                                       [mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretchCorners(panostretch_gen), None],
+                                       [transforms.Resize((img_size[0],img_size[1])),transforms.Resize((pred_size[0],pred_size[1])),transforms.Resize((pred_size[0],pred_size[1])),None],
                                        flip_gen,
                                        [mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5), None],
                                        [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor(), None],
@@ -376,7 +378,7 @@ def _train(args):
         [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.458, 0.408], std=[1.0, 1.0, 1.0])])
-    valid_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
+    valid_target_transform = transforms.Compose([transforms.Resize((pred_size[0],pred_size[1])),
                                            transforms.ToTensor()])     
 
     """
@@ -565,8 +567,15 @@ def model_fn(model_dir,model_name, conv_type, modelfile):
         logger.info("Gpu count: {}".format(torch.cuda.device_count()))
         model = nn.DataParallel(model)
 
-    with open(os.path.join(model_dir, modelfile), 'rb') as f:
-        model.load_state_dict(torch.load(f))
+    pretrained_dict = torch.load(modelfile)
+    model_dict = model.state_dict()
+    # 1. filter out unnecessary keys
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    # 2. overwrite entries in the existing state dict
+    model_dict.update(pretrained_dict)
+    # 3. load the new state dict
+    model.load_state_dict(model_dict)
+
     return model
 
 
