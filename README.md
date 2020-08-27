@@ -9,7 +9,7 @@ pytorch 1.4\
 torchvision 0.5\
 cuda 10.1
 
-run python3 train_CFL.py to train and test_CFL.py to do inference with the EfficientNet based models.
+Run python3 train_CFL.py to train and python3 test_CFL.py to do inference with the EfficientNet based models.
 
 pretrained weights to use with the TFCFL models:
 
@@ -21,6 +21,8 @@ Update 20-07-2020:
 I have implemented a version of CFLPytorch called TFCFL which is CFLPytorch created by converting the model and the weights from TensorFlow CFL.
 
 run python3 test_TFCFL.py --conv_type Std --modelfile StdConvsTFCFL.pth to do inference with this model. 
+
+No training script for TFCFL models yet.
 
 TensorFlow CFL metrics after fixing the threshold parameter (StdConvs):
 
