@@ -12,8 +12,8 @@ cuda 10.1
 run python3 train_CFL.py to train and test_CFL.py to do inference with the EfficientNet based models.
 
 pretrained weights to use with the TFCFL models:
-[StdConvs](https://drive.google.com/file/d/1yiEV9PRzdaYpsDcd94yEWSI0rU3_fa9S/view?usp=sharing)
 
+[StdConvs](https://drive.google.com/file/d/1yiEV9PRzdaYpsDcd94yEWSI0rU3_fa9S/view?usp=sharing)
 
 [EquiConvs](https://drive.google.com/file/d/1aPyFFyYUgbUugpG9Gnpr4DKUgmgR1jdh/view?usp=sharing)
 
