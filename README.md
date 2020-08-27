@@ -27,11 +27,15 @@ EDGES: IoU: 0.564; Accuracy: 0.936; Precision: 0.696; Recall: 0.731; f1 score: 0
 CORNERS: IoU: 0.553; Accuracy: 0.986; Precision: 0.687; Recall: 0.724; f1 score: 0.704
 
 PyTorch TFCFL metrics (StdConvs): 
+
 EDGES: IoU: 0.564; Accuracy: 0.936; Precision: 0.696; Recall: 0.731; f1 score: 0.713
+
 CORNERS: IoU: 0.553; Accuracy: 0.986; Precision: 0.687; Recall: 0.724; f1 score: 0.704
 
 PyTorch TFCFL metrics (EquiConvs):
+
 EDGES: IoU: 0.536; Accuracy: 0.931; Precision: 0.679; Recall: 0.699; f1 score: 0.688
+
 CORNERS: IoU: 0.539; Accuracy: 0.986; Precision: 0.690; Recall: 0.696; f1 score: 0.691
 
 
