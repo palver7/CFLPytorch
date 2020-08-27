@@ -23,7 +23,9 @@ I have implemented a version of CFLPytorch called TFCFL which is CFLPytorch crea
 run python3 test_TFCFL.py --conv_type Std --modelfile StdConvsTFCFL.pth to do inference with this model. 
 
 TensorFlow CFL metrics after fixing the threshold parameter (StdConvs):
+
 EDGES: IoU: 0.564; Accuracy: 0.936; Precision: 0.696; Recall: 0.731; f1 score: 0.713
+
 CORNERS: IoU: 0.553; Accuracy: 0.986; Precision: 0.687; Recall: 0.724; f1 score: 0.704
 
 PyTorch TFCFL metrics (StdConvs): 
