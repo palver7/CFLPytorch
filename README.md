@@ -20,7 +20,7 @@ pretrained weights to use with the TFCFL models:
 Update 20-07-2020:
 I have implemented a version of CFLPytorch called TFCFL which is CFLPytorch created by converting the model and the weights from TensorFlow CFL.
 
-run python3 test_TFCFL.py --conv_type Std --modelfile StdConvsTFCFL.pth to do inference with this model. 
+Run python3 test_TFCFL.py --conv_type Std --modelfile StdConvsTFCFL.pth to do inference with this model. 
 
 No training script for TFCFL models yet.
 
