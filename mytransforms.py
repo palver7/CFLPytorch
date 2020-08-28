@@ -256,3 +256,17 @@ class RandomPanoStretchCorners(object):
 
 
         return CM              
+
+class ImagePreprocessing(object):
+    def __call__(self, image):
+        image = np.asarray(image)
+        if image.ndim < 3:
+            image = np.expand_dims(image,axis=-1)    
+        if image.shape[-1] == 3:
+            mean_color = [103.939, 116.779, 123.68]
+            r,g,b = np.split(image,3,axis=2)
+            image = np.concatenate((b - mean_color[0], g - mean_color[1], r - mean_color[2]),axis=2)
+        tensor = torch.from_numpy(image)
+        tensor = tensor.permute(2,0,1)        
+
+        return tensor 
