@@ -252,10 +252,9 @@ class RandomPanoStretchCorners(object):
             image, cor = panostretch.pano_stretch(image, self._gen.cor, self._gen.kx, self._gen.ky)
             hm = np.zeros((512, 1024), dtype=np.float32)
             hm = (draw_umich_gaussian(hm,cor)*255).astype(np.uint8)
-            CM = Image.fromarray(hm)    
+            image = Image.fromarray(hm)    
 
-
-        return CM              
+        return image              
 
 class ImagePreprocessing(object):
     def __call__(self, image):
