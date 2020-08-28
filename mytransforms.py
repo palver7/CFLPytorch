@@ -258,7 +258,7 @@ class RandomPanoStretchCorners(object):
 
 class ImagePreprocessing(object):
     def __call__(self, image):
-        image = np.asarray(image)
+        image = np.array(image).astype(np.float32)
         if image.ndim < 3:
             image = np.expand_dims(image,axis=-1)    
         if image.shape[-1] == 3:
