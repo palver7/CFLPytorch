@@ -130,10 +130,8 @@ def ce_loss(pred, gt):
     W_0 = N/N_0
     
     loss = 0
-
     pos_loss = W_1.view(-1,1,1,1) * (gt * -torch.log(pred))
     neg_loss = W_0.view(-1,1,1,1) * ((1 - gt)*(-torch.log(1-pred)))
-
     pos_loss = pos_loss.sum()
     neg_loss = neg_loss.sum()
     loss = pos_loss + neg_loss
@@ -141,14 +139,30 @@ def ce_loss(pred, gt):
     
     return loss
 
-class CELoss(nn.Module):
-  '''nn.Module warpper for custom CE loss'''
-  def __init__(self):
-    super(CELoss, self).__init__()
-    self.ce_loss = ce_loss
+def map_loss(inputs, EM_gt,CM_gt,criterion):
+    '''
+    function to calculate total loss according to CFL paper
+    '''
+    EMLoss=0.
+    CMLoss=0.
+    for key in inputs:
+        output = inputs[key]
+        EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
+        CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
+        edges,corners =torch.chunk(output,2,dim=1)
+        EMLoss += criterion(edges,EM)
+        CMLoss += criterion(corners,CM)        
+    return EMLoss, CMLoss
 
-  def forward(self, out, target):
-    return self.ce_loss(out, target)
+class CELoss(nn.Module):
+    '''nn.Module warpper for custom CE loss'''
+    def __init__(self):
+        super(CELoss, self).__init__()
+        self.ce_loss = ce_loss
+        self.map_loss = map_loss
+    def forward(self, inputs, EM_gt,CM_gt):
+        EM, CM = self.map_loss(inputs, EM_gt, CM_gt, self.ce_loss)
+        return EM, CM
 
 class SUN360Dataset(Dataset):
     
@@ -250,7 +264,7 @@ class SplitDataset(Dataset):
         """
         
         if self.transform is not None:
-            image = self.transform(image)     
+            image = self.transform(image)
         
         if self.target_transform is not None:
             CM = self.target_transform(CM)
@@ -261,20 +275,7 @@ class SplitDataset(Dataset):
 
         return image, EM, CM
 
-def map_loss(inputs, EM_gt,CM_gt,criterion):
-    '''
-    function to calculate total loss according to CFL paper
-    '''
-    EMLoss=0.
-    CMLoss=0.
-    for key in inputs:
-        output = inputs[key]
-        EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
-        CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
-        edges,corners =torch.chunk(output,2,dim=1)
-        EMLoss += criterion(edges,EM)
-        CMLoss += criterion(corners,CM)        
-    return EMLoss, CMLoss
+
 
 def convert_to_images(inputs,epoch,phase):
     if not os.path.isdir("CM_pred"):
@@ -283,7 +284,7 @@ def convert_to_images(inputs,epoch,phase):
         os.mkdir("EM_pred")   
 
     tojpg = transforms.ToPILImage()    
-    output = inputs['output'] + eps
+    output = inputs['output_likelihood']
     output = torch.sigmoid(output)
     edges,corners = torch.chunk(output,2,dim=1)
     image = corners[0].detach().cpu()
@@ -309,11 +310,11 @@ def map_predict(outputs, EM_gt,CM_gt):
     '''
     function to calculate total loss according to CFL paper
     '''
-    output= outputs['output_likelihood']
+    output= outputs['output_likelihood'] 
+    output = torch.sigmoid(output)
+    EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
+    CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     edges,corners =torch.chunk(output,2,dim=1)
-    EM, CM = torch.sigmoid(edges), torch.sigmoid(corners)
-    #EM=F.interpolate(EM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
-    #CM=F.interpolate(CM_gt,size=(output.shape[-2],output.shape[-1]),mode='bilinear',align_corners=True)
     IoU_e = evaluate(edges,EM)
     IoU_c = evaluate(corners, CM)
     #P_e, R_e, Acc_e, f1_e, IoU_e = evaluate(edges,EM)
@@ -327,7 +328,6 @@ def _train(args):
     """
     is_distributed = len(args.hosts) > 1 and args.dist_backend is not None
     logger.debug("Distributed training - {}".format(is_distributed))
-
     if is_distributed:
         # Initialize the distributed environment.
         world_size = len(args.hosts)
@@ -361,10 +361,10 @@ def _train(args):
     flip_gen = mytransforms.RandomHorizontalFlipGenerator()
     panostretch_gen = mytransforms.RandomPanoStretchGenerator(max_stretch = 2.0)
     
-    train_joint_transform = mytransforms.Compose([
-                                       panostretch_gen,
-                                       [mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretchCorners(panostretch_gen), None],
-                                       [transforms.Resize((img_size[0],img_size[1])),transforms.Resize((pred_size[0],pred_size[1])),transforms.Resize((pred_size[0],pred_size[1])),None],
+    
+    train_joint_transform = mytransforms.Compose([panostretch_gen,
+                                       [mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretch(panostretch_gen), mytransforms.RandomPanoStretchCorners(panostretch_gen), None],           
+                                       [transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),transforms.Resize((img_size[0],img_size[1])),None],
                                        flip_gen,
                                        [mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5),mytransforms.RandomHorizontalFlip(flip_gen,p=0.5), None],
                                        [transforms.ToTensor(),transforms.ToTensor(),transforms.ToTensor(), None],
@@ -378,7 +378,7 @@ def _train(args):
         [transforms.Resize((img_size[0],img_size[1])),
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.458, 0.408], std=[1.0, 1.0, 1.0])])
-    valid_target_transform = transforms.Compose([transforms.Resize((pred_size[0],pred_size[1])),
+    valid_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])     
 
     """
@@ -406,8 +406,10 @@ def _train(args):
     logger.info("Model loaded")
     if args.modelfile is None:
         if args.conv_type == "Std":
-            #model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
-            model = Res50Std()
+            if "efficientnet" in args.model_name:
+                model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
+            elif "ResNet" in args.model_name:    
+                model = Res50Std()
         elif args.conv_type == "Equi":                                       
             layerdict, offsetdict = torch.load('layertrain.pt'), torch.load('offsettrain.pt')
             model = EquiConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=layerdict, offsetdict=offsetdict)    
@@ -460,7 +462,7 @@ def _train(args):
             
             l2_reg = None
             for name, W in model.named_parameters():
-                if 'weight' in name:
+                if 'weight' in name and 'bn' not in name:
                     if l2_reg is None:
                         l2_reg = W.norm(2)**2
                     else:
@@ -468,7 +470,7 @@ def _train(args):
                     
             if(epoch%10 == 0 and i == 0):
                 convert_to_images(outputs,epoch,phase)
-            EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
+            EMLoss, CMLoss = criterion(outputs,EM,CM)
             #loss = EMLoss + CMLoss
             loss = EMLoss + CMLoss + WDecay * 0.5 * (l2_reg / inputs.size(0))
             IoU_e, IoU_c = map_predict(outputs,EM,CM)
@@ -509,7 +511,7 @@ def _train(args):
                     
                     l2_reg = None
                     for name, W in model.named_parameters():
-                        if 'weight' in name:
+                        if 'weight' in name and 'bn' not in name:
                             if l2_reg is None:
                                 l2_reg = W.norm(2)**2
                             else:
@@ -517,7 +519,7 @@ def _train(args):
                         
                     if(epoch%10 == 0 and i == 0):
                         convert_to_images(outputs,epoch,phase)
-                    EMLoss, CMLoss = map_loss(outputs,EM,CM,criterion)
+                    EMLoss, CMLoss = criterion(outputs,EM,CM)
                     #loss = EMLoss + CMLoss
                     loss = EMLoss + CMLoss + WDecay * 0.5 * (l2_reg / inputs.size(0))
                     IoU_e, IoU_c = map_predict(outputs,EM,CM)
@@ -558,8 +560,10 @@ def model_fn(model_dir,model_name, conv_type, modelfile):
     logger.info('model_fn')
     #device = "cuda" if torch.cuda.is_available() else "cpu"
     if conv_type == "Std":
-        #model = StdConvsCFL(model_name,conv_type=conv_type, layerdict=None, offsetdict=None)
-        model = Res50Std()
+        if "efficientnet" in args.model_name:
+                model = StdConvsCFL(args.model_name,conv_type=args.conv_type, layerdict=None, offsetdict=None)
+        elif "ResNet" in args.model_name:    
+                model = Res50Std()
     elif conv_type == "Equi":                                       
         layerdict, offsetdict = torch.load('layertrain.pt'), torch.load('offsettrain.pt')
         model = EquiConvsCFL(model_name,conv_type=conv_type, layerdict=layerdict, offsetdict=offsetdict)
@@ -575,7 +579,6 @@ def model_fn(model_dir,model_name, conv_type, modelfile):
     model_dict.update(pretrained_dict)
     # 3. load the new state dict
     model.load_state_dict(model_dict)
-
     return model
 
 
