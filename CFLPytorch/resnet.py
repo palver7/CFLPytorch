@@ -145,7 +145,7 @@ class ResNet(nn.Module):
         self.groups = groups
         self.base_width = width_per_group
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
-                               bias=True)
+                               bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=False)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -248,14 +248,12 @@ def _resnet(arch, block, layers, pretrained, progress, **kwargs):
         model_dict.update(state_dict)
         # 3. load the new state dict
         model.load_state_dict(model_dict)
-
     return model
 
 
 def resnet18(pretrained=False, progress=True, **kwargs):
     r"""ResNet-18 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -267,7 +265,6 @@ def resnet18(pretrained=False, progress=True, **kwargs):
 def resnet34(pretrained=False, progress=True, **kwargs):
     r"""ResNet-34 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -279,7 +276,6 @@ def resnet34(pretrained=False, progress=True, **kwargs):
 def resnet50(pretrained=False, progress=True, **kwargs):
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -291,7 +287,6 @@ def resnet50(pretrained=False, progress=True, **kwargs):
 def resnet101(pretrained=False, progress=True, **kwargs):
     r"""ResNet-101 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -303,7 +298,6 @@ def resnet101(pretrained=False, progress=True, **kwargs):
 def resnet152(pretrained=False, progress=True, **kwargs):
     r"""ResNet-152 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -315,7 +309,6 @@ def resnet152(pretrained=False, progress=True, **kwargs):
 def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
     r"""ResNeXt-50 32x4d model from
     `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -329,7 +322,6 @@ def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
 def resnext101_32x8d(pretrained=False, progress=True, **kwargs):
     r"""ResNeXt-101 32x8d model from
     `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -343,12 +335,10 @@ def resnext101_32x8d(pretrained=False, progress=True, **kwargs):
 def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
     r"""Wide ResNet-50-2 model from
     `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
-
     The model is the same as ResNet except for the bottleneck number of channels
     which is twice larger in every block. The number of channels in outer 1x1
     convolutions is the same, e.g. last block in ResNet-50 has 2048-512-2048
     channels, and in Wide ResNet-50-2 has 2048-1024-2048.
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -361,12 +351,10 @@ def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
 def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
     r"""Wide ResNet-101-2 model from
     `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
-
     The model is the same as ResNet except for the bottleneck number of channels
     which is twice larger in every block. The number of channels in outer 1x1
     convolutions is the same, e.g. last block in ResNet-50 has 2048-512-2048
     channels, and in Wide ResNet-50-2 has 2048-1024-2048.
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -379,6 +367,7 @@ class StdConvsCFL(nn.Module):
     def __init__(self):
         super().__init__()
         self._encoder = resnet50(pretrained=True, progress=True)
+        self._ReLU = nn.ReLU(inplace=False)
         
         # Decoder layer
         self._upconv1a = nn.ConvTranspose2d(2048, 512, kernel_size=5, bias=True, stride=2, padding=2, output_padding=1)
@@ -397,29 +386,29 @@ class StdConvsCFL(nn.Module):
      #------------------------------------------------------------------------------------  
         # decoder EDGE MAPS & CORNERS MAPS   
         
-        d_2x = self._upconv1a(x) 
+        d_2x = self._ReLU(self._upconv1a(x)) 
     
         
         d_concat_2x = torch.cat((d_2x,skipconnection[4]),dim=1)
-        d_4x = self._upconv1b(d_concat_2x)    
+        d_4x = self._ReLU(self._upconv1b(d_concat_2x))    
         output4x_likelihood = self._upconv1c(d_4x)    
         ret['output4x_likelihood'] = output4x_likelihood
 
         
         d_concat_4x = torch.cat((d_4x,skipconnection[3],output4x_likelihood),dim=1)
-        d_8x = self._upconv2a(d_concat_4x)   
+        d_8x = self._ReLU(self._upconv2a(d_concat_4x))    
         output8x_likelihood = self._upconv2b(d_8x)
         ret['output8x_likelihood'] = output8x_likelihood
         
         
         d_concat_8x = torch.cat((d_8x,skipconnection[2],output8x_likelihood),dim=1)
-        d_16x = self._upconv3a(d_concat_8x) 
+        d_16x = self._ReLU(self._upconv3a(d_concat_8x)) 
         output16x_likelihood = self._upconv3b(d_16x)  
         ret['output16x_likelihood'] = output16x_likelihood
         
         
         d_concat_16x = torch.cat((d_16x,skipconnection[1],output16x_likelihood),dim=1)
-        d_16x_conv1 = self._upconv4a(d_concat_16x)
+        d_16x_conv1 = self._ReLU(self._upconv4a(d_concat_16x))
         output_likelihood = self._upconv4b(d_16x_conv1)    
         ret['output_likelihood'] = output_likelihood
 
@@ -430,4 +419,4 @@ if __name__ == '__main__':
     input0 = torch.randn(1,3,128,256)
     model = StdConvsCFL()
     output0 = model(input0)
-    print(output0['output'].shape)
+    print(output0['output_likelihood'].shape)
