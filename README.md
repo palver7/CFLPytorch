@@ -22,7 +22,7 @@ I have implemented a version of CFLPytorch called TFCFL which is CFLPytorch crea
 
 Run python3 test_TFCFL.py --conv_type Std --modelfile StdConvsTFCFL.pth to do inference with this model. 
 
-No training script for TFCFL models yet.
+Run python3 train_TFCFL.py to train with TFCFL
 
 TensorFlow CFL metrics after fixing the threshold parameter (StdConvs):
 
