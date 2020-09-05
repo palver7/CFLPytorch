@@ -354,7 +354,7 @@ def _train(args):
          transforms.ToTensor(),
          transforms.Normalize(mean=[0.485, 0.458, 0.408], std=[1.0, 1.0, 1.0])
         ])
-    train_target_transform = transforms.Compose([transforms.Resize((pred_size[0],pred_size[1])),
+    train_target_transform = transforms.Compose([transforms.Resize((img_size[0],img_size[1])),
                                            transforms.ToTensor()])
     
     roll_gen = mytransforms.RandomHorizontalRollGenerator()
